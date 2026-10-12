@@ -22,7 +22,7 @@ export function rank(sims: number[], books: Book[], opts: { exclude?: Set<string
 /** Lexical fallback (while the model loads or if it fails): character-bigram overlap, IDF-weighted. */
 export function bigrams(s: string): string[] { const t = s.replace(/[\s\p{P}]/gu, ''); const out: string[] = []; for (let i = 0; i < t.length - 1; i++) out.push(t.slice(i, i + 2)); return out; }
 export function lexicalSims(note: string, books: Book[]): number[] {
-  const docs = books.map(b => new Set(bigrams(`${b.title}${b.themes.join('')}${b.hook}${b.summary}`)));
+  const docs = books.map(b => new Set(bigrams(`${b.title}${(b.aliases ?? []).join('')}${b.author ?? ''}${b.themes.join('')}${b.hook}${b.summary}`)));
   const df = new Map<string, number>(); docs.forEach(d => d.forEach(g => df.set(g, (df.get(g) ?? 0) + 1)));
   const q = [...new Set(bigrams(note))];
   return docs.map(d => q.reduce((s, g) => (d.has(g) ? s + Math.log(books.length / (df.get(g) ?? 1)) : s), 0));

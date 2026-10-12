@@ -129,10 +129,10 @@ function render(l: Letter, b: Book, n: number, conf: Confidence) {
 function card(b: Book, via: 'semantic' | 'lexical') {
   const c = coverUrl(b.cover);
   const meta1 = [b.author, b.year, b.country].filter(Boolean).map(x => esc(String(x))).join(' · ');
-  return `<div class="cover"><div class="ph">${esc(b.title)}</div>${c ? `<img src="${esc(c)}" alt="《${esc(b.title)}》封面" loading="lazy" referrerpolicy="no-referrer">` : ''}</div>
+  return `<div class="cover"><div class="ph">${esc(b.title)}</div>${c ? `<img src="${esc(c)}" alt="《${esc(b.title)}》封面" loading="lazy" decoding="async" width="${b.coverW ?? 180}" height="${b.coverH ?? 260}">` : ''}</div>
   <div class="cardtext"><div class="cno">借书卡 · ${isSleeping(b) ? '久未借出' : '在架'}</div><h3>《${esc(b.title)}》</h3>${b.originalTitle && b.originalTitle !== b.title ? `<div class="orig">${esc(b.originalTitle)}</div>` : ''}
   <div class="who">${meta1}</div>
-  <p class="method">${esc(methodLine(b, via, cat.obscuritySource.window))} · <a href="${esc(b.sourceUrl)}" target="_blank" rel="noopener">维基原文 ↗</a></p></div>`;
+  <p class="method">${esc(methodLine(b, via, cat.obscuritySource.window))} · <a href="${esc(b.revisionUrl || b.sourceUrl)}" target="_blank" rel="noopener">维基原文 ↗</a> · <a href="#/credits">出处与版权</a></p></div>`;
 }
 function typeOut(paras: Para[], done: () => void) {
   const body = $('body'); body.innerHTML = ''; const my = ++typing;
@@ -148,13 +148,22 @@ function typeOut(paras: Para[], done: () => void) {
   tick();
 }
 
-$('foot').innerHTML = `书目：中文维基百科 / Wikidata（CC BY-SA 4.0）· 封面：Open Library · 冷门度：Wikimedia 浏览量 ${cat.obscuritySource.window.join('–')}（中+英）与 Wikidata 语言版本数，取于 ${cat.obscuritySource.fetchedAt.slice(0, 10)} · 语义检索：${meta.model.split('/')[1]}，模型与字体均托管在本站，在浏览器本地运行`;
+$('foot').innerHTML = `<a href="#/credits">出处与版权 →</a> · 书目：中文维基百科 / Wikidata（CC BY-SA 4.0）· 封面：Open Library · 冷门度：Wikimedia 浏览量 ${cat.obscuritySource.window.join('–')}（中+英）与 Wikidata 语言版本数，取于 ${cat.obscuritySource.fetchedAt.slice(0, 10)} · 语义检索：${meta.model.split('/')[1]}，模型与字体均托管在本站，在浏览器本地运行`;
 $('count').textContent = String(loadLetters().length);
 
 const archive = mountArchive($('archive'), byId, index);
+let creditsDone = false;
+async function showCredits() {
+  if (creditsDone) return; creditsDone = true;
+  const c = await fetch(`${import.meta.env.BASE_URL}data/credits.json`).then(r => r.json()) as { package: string; books: { title: string; text: { url: string }; cover: { provider: string; sourceUrl: string; licenseClass: string; license: string | null; artist: string | null } | null }[] };
+  const LC: Record<string, string> = { free: '自由许可', 'publisher-copyright': '出版方版权 · 仅作书目识别', 'non-free-fair-use': '非自由 · 合理使用', unknown: '许可未明' };
+  $('credits-list').innerHTML = c.books.map(b => `<li><b>《${esc(b.title)}》</b><span>文字：<a href="${esc(b.text.url)}" target="_blank" rel="noopener">中文维基百科</a>（CC BY-SA 4.0）</span><span>${b.cover ? `封面：<a href="${esc(b.cover.sourceUrl ?? '#')}" target="_blank" rel="noopener">${esc(b.cover.provider ?? '')}</a> · ${esc(b.cover.license ?? LC[b.cover.licenseClass] ?? '')}${b.cover.artist ? ` · ${esc(b.cover.artist)}` : ''}` : '封面：暂缺（用书名占位）'}</span></li>`).join('');
+  $('credits-pkg').textContent = c.package;
+}
 function route() {
-  const r = location.hash.startsWith('#/archive') ? 'archive' : 'desk';
-  $('desk').hidden = r !== 'desk'; $('archive').hidden = r !== 'archive'; $('foot').hidden = r !== 'desk';
+  const r = location.hash.startsWith('#/archive') ? 'archive' : location.hash.startsWith('#/credits') ? 'credits' : 'desk';
+  $('desk').hidden = r !== 'desk'; $('archive').hidden = r !== 'archive'; $('credits').hidden = r !== 'credits'; $('foot').hidden = r === 'archive';
+  if (r === 'credits') showCredits();
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', (a as HTMLElement).dataset.r === r));
   if (r === 'archive') archive.show(loadLetters());
 }

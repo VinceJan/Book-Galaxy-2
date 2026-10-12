@@ -42,7 +42,7 @@ describe('letter', () => {
     for (const b of books.slice(0, 200)) {
       const p = composeLetter('最近很累', b, byId); const all = p.map(x => x.t).join('');
       const ex = excerpt(b); if (ex) { expect(all).toContain(ex); expect(ex).not.toMatch(/[（(][^）)]{0,6}语[：:]/); expect(ex).toMatch(/[。！？!?」”]$/); }
-      for (const m of all.matchAll(/《([^》]+)》/g)) expect(books.some(x => x.title === m[1]) || b.summary.includes(m[0]) || b.links.some(l => l.sentence?.includes(m[0]))).toBe(true);
+      for (const m of all.matchAll(/《([^》]+)》/g)) expect(books.some(x => x.title === m[1]) || b.summary.includes(m[0]) || b.links.some(l => (l.sentence ?? l.grounded ?? "").includes(m[0]))).toBe(true);
       expect(all).not.toMatch(/归在|逐一比对|美国文学|20世纪作品/);
     }
   });
@@ -77,4 +77,15 @@ describe('archive', () => {
     const d = (i: number, j: number) => Math.hypot(n[i].x - n[j].x, n[i].y - n[j].y); expect(d(1, 3)).toBeLessThan(d(1, 2)); expect(d(2, 4)).toBeLessThan(d(2, 3));
   });
   it('persists letters', () => { const m = new Map<string, string>(); const s = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => m.set(k, v) } as unknown as Storage; saveLetter(L(1, 'x'), s); saveLetter(L(2, 'y'), s); expect(loadLetters(s).map(l => l.bookId)).toEqual(['x', 'y']); });
+});
+describe('data package wiring', () => {
+  it('every cover is a self-hosted small webp; missing covers are null (placeholder)', () => {
+    const withCover = books.filter(b => b.cover); expect(withCover.length).toBeGreaterThanOrEqual(900);
+    for (const b of withCover) { expect(b.cover).toMatch(/^covers\/Q\d+\.webp$/); const st = fs.statSync('public/' + b.cover); expect(st.size).toBeLessThan(40_000); }
+  });
+  it('credits list text + cover provenance for every book', () => {
+    const c = JSON.parse(fs.readFileSync('public/data/credits.json', 'utf8')); expect(c.books.length).toBe(1000);
+    expect(c.books.filter((x: { cover: unknown }) => x.cover).length).toBe(books.filter(b => b.cover).length);
+  });
+  it('aliases feed the lexical fallback', () => { const s = lexicalSims('The Goal', books); expect(books[s.indexOf(Math.max(...s))].title).toBe('目标'); });
 });

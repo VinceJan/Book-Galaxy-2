@@ -6,7 +6,7 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   const cv = root.querySelector('canvas')!, x = cv.getContext('2d')!, side = root.querySelector<HTMLElement>('#side')!;
   const pos = new Map(index.books.map((b, i) => [b.id, i]));
   const sim = (a: string, b: string) => { const i = pos.get(a)!, j = pos.get(b)!; let s = 0; for (let k = 0; k < index.dim; k++) s += index.vecs[i * index.dim + k] * index.vecs[j * index.dim + k]; return s / index.scale / index.scale; };
-  const GEN = /世纪作品|文学$|文本叙事|作品语境/;
+  const GEN = /世纪作品|文学$|文本叙事|作品语境|^自传$|^传记$|^图像小说$/;
   const weight = (a: string, b: string) => { const A = byId.get(a), B = byId.get(b); if (!A || !B) return 0; const shared = A.themes.filter(t => !GEN.test(t) && B.themes.includes(t)).length; return 0.45 * shared + Math.max(0, sim(a, b)); };
   let nodes: Node[] & { edges?: import('./layout').Edge[] } = [], focus = 0, W = 0, H = 0, born = new Map<number, number>();
   const cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 };

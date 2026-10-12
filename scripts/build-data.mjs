@@ -7,16 +7,27 @@ const pct = arr => { const s = [...arr].sort((a, b) => a - b); return x => { let
 const views = id => (obs.books[id].zhViews || 0) + (obs.books[id].enViews || 0);
 const pV = pct(cat.books.map(b => Math.log1p(views(b.id)))), pS = pct(cat.books.map(b => obs.books[b.id].sitelinks));
 const rel = {}; for (const r of cat.relations) (rel[r.source] ||= []).push(r);
+// Canonical data package (book-galaxy-data): better metadata, meaningful themes, aliases, verbatim descriptions, covers, strong written relations.
+const PKG = process.env.BG_PKG || '/workspace/book-galaxy-data';
+const pkg = Object.fromEntries(JSON.parse(fs.readFileSync(`${PKG}/dist/books.json`, 'utf8')).books.map(b => [b.id, b]));
+const pkgMeta = JSON.parse(fs.readFileSync(`${PKG}/dist/books.json`, 'utf8')).meta;
+const covers = fs.existsSync('scripts/raw/covers.index.json') ? JSON.parse(fs.readFileSync('scripts/raw/covers.index.json', 'utf8')).covers : {};
+const strong = {}; for (const r of JSON.parse(fs.readFileSync(`${PKG}/dist/relations.json`, 'utf8')).relations) if (r.quality?.strong) { (strong[r.source] ||= []).push({ id: r.target, sentence: r.sentence, type: r.type }); (strong[r.target] ||= []).push({ id: r.source, sentence: r.sentence, type: r.type }); }
 const localCover = b => { for (const ext of ['jpg', 'png', 'webp']) { const p = `covers/${b.id}.${ext}`; if (fs.existsSync(`${V1}/public/${p}`)) { fs.mkdirSync('public/covers', { recursive: true }); fs.copyFileSync(`${V1}/public/${p}`, `public/${p}`); return p; } } return null; };
 const books = cat.books.map(b => { const o = obs.books[b.id];
   const score = +(0.7 * (1 - pV(Math.log1p(views(b.id)))) + 0.3 * (1 - pS(o.sitelinks))).toFixed(4);
-  return { id: b.id, title: b.title, author: b.author || null, year: b.year ?? null, country: b.country || null, language: b.language || null,
-    originalTitle: b.originalTitle || null, summary: b.summary || '', hook: b.hook || '', themes: (b.themes || []).filter(t => t !== '文本叙事' && t !== '作品语境'),
-    cover: localCover(b) || b.coverUrl || null, sourceUrl: b.sourceUrl, wikidataUrl: b.wikidataUrl,
+  const P = pkg[b.id] || {}; const cv = covers[b.id];
+  return { id: b.id, title: P.title || b.title, author: P.authors?.map(a => a.name).join('、') || b.author || null, year: P.year ?? b.year ?? null, country: P.country || b.country || null, language: P.language || b.language || null,
+    originalTitle: P.originalTitle || b.originalTitle || null, aliases: (P.aliases || []).filter(a => a !== (P.title || b.title)).slice(0, 8),
+    summary: P.description?.text || b.summary || '', hook: b.hook || '', themes: P.themes ? P.themes.map(t => t.label) : (b.themes || []).filter(t => t !== '文本叙事' && t !== '作品语境'),
+    facets: P.facets ? { era: P.facets.era || null, tradition: P.facets.tradition || null, genres: (P.facets.genres || []).map(g => g.label) } : null,
+    cover: cv ? cv.file : null, coverW: cv?.w ?? null, coverH: cv?.h ?? null, sourceUrl: P.links?.wikipedia || b.sourceUrl, revisionUrl: P.description?.revisionUrl || null, wikidataUrl: b.wikidataUrl,
     obscurity: { score, zhViews: o.zhViews, enViews: o.enViews, sitelinks: o.sitelinks },
-    links: (rel[b.id] || []).sort((x, y) => y.weight - x.weight).slice(0, 6).map(r => ({ id: r.target, kind: r.kind, band: r.bandByBook?.[b.id] || null, sharedThemes: r.evidence?.sharedThemes || [], similarity: r.similarity, sentence: r.sentence })) }; });
+    links: [...(strong[b.id] || []).map(r => ({ id: r.id, kind: r.type, band: r.type === 'near' ? 'near' : r.type === 'far' ? 'far' : 'middle', sharedThemes: [], similarity: 1, grounded: r.sentence })), ...(rel[b.id] || []).sort((x, y) => y.weight - x.weight).slice(0, 6).map(r => ({ id: r.target, kind: r.kind, band: r.bandByBook?.[b.id] || null, sharedThemes: (r.evidence?.sharedThemes || []).filter(t => (pkg[b.id]?.themes || []).some(x => x.label === t)), similarity: r.similarity }))] }; });
 const sorted = [...books].sort((a, b) => a.obscurity.score - b.obscurity.score); sorted.forEach((b, i) => (b.obscurity.percentile = +(i / (books.length - 1)).toFixed(3)));
-fs.writeFileSync('public/data/books.json', JSON.stringify({ generatedAt: new Date().toISOString(), source: cat.source, obscuritySource: { method: obs.source, window: obs.window, fetchedAt: obs.fetchedAt, formula: 'score = 0.7*(1-pct(log1p(zhViews+enViews))) + 0.3*(1-pct(sitelinks))' }, books }));
-console.log(books.length, 'covers local:', books.filter(b => b.cover?.startsWith('covers/')).length, 'remote:', books.filter(b => b.cover?.startsWith('http')).length);
+fs.writeFileSync('public/data/books.json', JSON.stringify({ generatedAt: new Date().toISOString(), source: cat.source, package: { name: pkgMeta.name, version: pkgMeta.version, builtAt: pkgMeta.builtAt }, obscuritySource: { method: obs.source, window: obs.window, fetchedAt: obs.fetchedAt, formula: 'score = 0.7*(1-pct(log1p(zhViews+enViews))) + 0.3*(1-pct(sitelinks))' }, books }));
+console.log(books.length, 'covers', books.filter(b => b.cover).length, 'strong relations on', books.filter(b => b.links.some(l => l.grounded)).length);
+const credits = cat.books.map(b => ({ id: b.id, title: (pkg[b.id] || {}).title || b.title, text: { source: '中文维基百科', url: (pkg[b.id]?.description?.revisionUrl) || b.sourceUrl, license: 'CC BY-SA 4.0' }, cover: covers[b.id] ? { provider: covers[b.id].provider, sourceUrl: covers[b.id].sourceUrl, licenseClass: covers[b.id].licenseClass, license: covers[b.id].license || null, artist: covers[b.id].artist || null } : null }));
+fs.writeFileSync('public/data/credits.json', JSON.stringify({ package: pkgMeta.name + '@' + pkgMeta.version, books: credits }));
 const t = n => books.find(b => b.title === n); console.log(['西游记', '哈姆雷特'].map(n => [n, t(n)?.obscurity]));
 console.log(sorted.slice(-3).map(b => [b.title, b.obscurity]));
