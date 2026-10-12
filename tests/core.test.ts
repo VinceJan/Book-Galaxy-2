@@ -69,7 +69,12 @@ describe('letter', () => {
 });
 describe('archive', () => {
   const L = (i: number, bookId: string): Letter => ({ id: 'l' + i, at: '', note: '', bookId, paragraphs: [], via: 'semantic', parentId: null });
-  it('node count is bounded by letters', () => { const ls = books.slice(0, 7).map((b, i) => L(i, b.id)); const n = layoutLetters(ls, () => 0); expect(n.length).toBe(8); expect(n.slice(1).every(x => x.parent === 0)).toBe(true); });
-  it('attaches to most similar earlier letter', () => { const n = layoutLetters([L(0, 'a'), L(1, 'b'), L(2, 'c')], (a, b) => (a === 'a' && b === 'c' ? 0.9 : 0)); expect(n[3].parent).toBe(1); expect([...firstDegree(n, 1)].sort()).toEqual([0, 1, 3]); });
+  it('node count is bounded by letters; unrelated letters form separate clusters (no star)', () => { const ls = books.slice(0, 7).map((b, i) => L(i, b.id)); const n = layoutLetters(ls, () => 0); expect(n.length).toBe(8); expect(n.slice(1).every(x => x.parent === -1)).toBe(true); expect(n.edges!.length).toBe(0); });
+  it('attaches to most related earlier letter and related letters cluster closer', () => {
+    const w = (a: string, b: string) => (('ac'.includes(a) && 'ac'.includes(b)) || ('bd'.includes(a) && 'bd'.includes(b)) ? 1 : 0);
+    const n = layoutLetters([L(0, 'a'), L(1, 'b'), L(2, 'c'), L(3, 'd')], w); expect(n[3].parent).toBe(1); expect(n[4].parent).toBe(2);
+    expect([...firstDegree(n, 1)].sort()).toEqual([1, 3]);
+    const d = (i: number, j: number) => Math.hypot(n[i].x - n[j].x, n[i].y - n[j].y); expect(d(1, 3)).toBeLessThan(d(1, 2)); expect(d(2, 4)).toBeLessThan(d(2, 3));
+  });
   it('persists letters', () => { const m = new Map<string, string>(); const s = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => m.set(k, v) } as unknown as Storage; saveLetter(L(1, 'x'), s); saveLetter(L(2, 'y'), s); expect(loadLetters(s).map(l => l.bookId)).toEqual(['x', 'y']); });
 });

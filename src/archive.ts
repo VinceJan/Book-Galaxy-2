@@ -6,7 +6,9 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   const cv = root.querySelector('canvas')!, x = cv.getContext('2d')!, side = root.querySelector<HTMLElement>('#side')!;
   const pos = new Map(index.books.map((b, i) => [b.id, i]));
   const sim = (a: string, b: string) => { const i = pos.get(a)!, j = pos.get(b)!; let s = 0; for (let k = 0; k < index.dim; k++) s += index.vecs[i * index.dim + k] * index.vecs[j * index.dim + k]; return s / index.scale / index.scale; };
-  let nodes: Node[] = [], focus = 0, W = 0, H = 0, born = new Map<number, number>();
+  const GEN = /世纪作品|文学$|文本叙事|作品语境/;
+  const weight = (a: string, b: string) => { const A = byId.get(a), B = byId.get(b); if (!A || !B) return 0; const shared = A.themes.filter(t => !GEN.test(t) && B.themes.includes(t)).length; return 0.45 * shared + Math.max(0, sim(a, b)); };
+  let nodes: Node[] & { edges?: import('./layout').Edge[] } = [], focus = 0, W = 0, H = 0, born = new Map<number, number>();
   const cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 };
   const mobile = () => W < 820;
   const ox = () => (mobile() ? W / 2 : (W - 360) / 2), oy = () => (mobile() ? H * 0.36 : H / 2);
@@ -15,14 +17,15 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   addEventListener('resize', resize);
 
   function setFocus(i: number, fly = true) { focus = i; const n = nodes[i]; if (fly) { cam.tx = n.x; cam.ty = n.y; } renderSide(); }
+  const clusterOf = (n: Node): string => { let c = n; while (c.parent > 0) c = nodes[c.parent]; return c.id; };
   function renderSide() {
     const L = nodes.slice(1).map(n => n.letter!);
     if (!L.length) { side.innerHTML = `<p class="k">archive of letters</p><div class="n">0<small>封回信</small></div><div class="focus empty-arch">还没有回信。<br><a href="#/">先去写一张纸条 →</a></div>`; return; }
     const f = nodes[focus].letter, b = f && byId.get(f.bookId);
     const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-    side.innerHTML = `<p class="k">archive of letters</p><div class="n">${L.length}<small>封回信 · ${L.length} 缕菌丝 · ${web.length} 条主题丝线</small></div>
+    side.innerHTML = `<p class="k">archive of letters</p><div class="n">${L.length}<small>封回信 · ${(nodes.edges ?? []).length} 条连线 · ${new Set(nodes.slice(1).map(n => clusterOf(n))).size} 簇</small></div>
     <div class="focus">${b && f ? `<h3>《${esc(b.title)}》</h3><div class="when">${new Date(f.at).toLocaleString('zh-CN')} · ${f.via === 'semantic' ? '语义检索' : '字面检索'}</div><div class="nt">“${esc(f.note)}”</div><p class="hk">${esc(b.hook)}</p>`
-      : `<h3>你</h3><p class="hk">所有回信都从这里长出去。相近的书会接在彼此身上，走远的书会另起一缕。</p>`}</div>
+      : `<h3>回信档案</h3><p class="hk">相近的书会接在彼此身上，共享主题的信之间有细线；毫不相干的信会另起一簇。</p>`}</div>
     <ol>${nodes.slice(1).map((n, i) => `<li data-i="${i + 1}" class="${i + 1 === focus ? 'on' : ''}"><i>${String(i + 1).padStart(2, '0')}</i>${esc(byId.get(n.letter!.bookId)?.title ?? '')}</li>`).reverse().join('')}</ol>`;
   }
   side.addEventListener('click', e => { const li = (e.target as HTMLElement).closest('li'); if (li) setFocus(+li.dataset.i!); });
@@ -45,10 +48,8 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   const q = (a: number, b: number, c: number, d: number, e: number, f: number, t: number) => { const u = 1 - t; return [u * u * a + 2 * u * t * c + t * t * e, u * u * b + 2 * u * t * d + t * t * f]; };
   const GENERIC = /世纪作品|文学$|文本叙事|作品语境/;
   let web: [number, number, string][] = [];
-  function buildWeb() { web = []; for (let i = 1; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
-    if (nodes[j].parent === i || nodes[i].parent === j) continue;
-    const a = byId.get(nodes[i].letter!.bookId), b = byId.get(nodes[j].letter!.bookId); if (!a || !b) continue;
-    const t = a.themes.find(x => !GENERIC.test(x) && b.themes.includes(x)); if (t) web.push([i, j, t]); } }
+  function buildWeb() { web = []; for (const e of nodes.edges ?? []) { if (nodes[e.b].parent === e.a || nodes[e.a].parent === e.b) continue;
+    const a = byId.get(nodes[e.a].letter!.bookId), b = byId.get(nodes[e.b].letter!.bookId); const t = a && b ? a.themes.find(x => !GENERIC.test(x) && b.themes.includes(x)) ?? '' : ''; web.push([e.a, e.b, t]); } }
   let raf = 0;
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
@@ -67,21 +68,21 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
       for (let s = 0; s < lim; s++) { const p0 = q(ax, ay, mx, my, bx, by, s / steps), p1 = q(ax, ay, mx, my, bx, by, (s + 1) / steps);
         x.lineWidth = Math.max(0.5, (2.8 * (1 - s / steps) + 0.5) * cam.z * (1 + 0.25 * Math.sin(h + s))); x.beginPath(); x.moveTo(p0[0], p0[1]); x.lineTo(p1[0], p1[1]); x.stroke(); }
       if (t > 0.4) { x.lineWidth = 0.5; x.strokeStyle = 'rgba(29,26,22,.22)'; for (let k = 1; k < 6; k++) { const pp = q(ax, ay, mx, my, bx, by, (k / 6) * t), a = h * k * 0.37; x.beginPath(); x.moveTo(pp[0], pp[1]); x.lineTo(pp[0] + Math.cos(a) * 11 * cam.z * t, pp[1] + Math.sin(a) * 11 * cam.z * t); x.stroke(); } } });
-    nodes.forEach((n, i) => { if (n.parent >= 0 && prog(i) < 0.95) return; const [sx, sy] = toScreen(n); const b = n.letter && byId.get(n.letter.bookId);
+    nodes.forEach((n, i) => { if (i === 0 && nodes.length > 1) return; if (n.parent >= 0 && prog(i) < 0.95) return; const [sx, sy] = toScreen(n); const b = n.letter && byId.get(n.letter.bookId);
       const isF = i === focus, show = near.has(i), r = (i === 0 ? 7 : isF ? 7.5 : 4.5) * Math.min(1.4, Math.max(0.7, cam.z));
       x.beginPath(); x.arc(sx, sy, r, 0, 7);
       if (i === 0) { x.fillStyle = '#efe7d6'; x.fill(); x.lineWidth = 1.6; x.strokeStyle = '#1d1a16'; x.stroke(); }
       else if (b && b.obscurity.percentile >= 0.6) { x.lineWidth = 1.5; x.strokeStyle = isF ? '#c8361d' : '#5d6b3a'; x.stroke(); x.beginPath(); x.arc(sx, sy, r * 0.38, 0, 7); x.fillStyle = x.strokeStyle; x.fill(); }
       else { x.fillStyle = isF ? '#c8361d' : '#1d1a16'; x.fill(); }
       if (isF) { x.beginPath(); x.arc(sx, sy, r + 6 + Math.sin(now / 500) * 1.5, 0, 7); x.strokeStyle = 'rgba(200,54,29,.35)'; x.lineWidth = 1; x.stroke(); }
-      if (show) { const label = i === 0 ? '你' : `《${b?.title ?? ''}》`; x.font = `${isF ? 900 : 500} ${isF ? 17 : 13}px "Noto Serif SC", serif`; x.fillStyle = isF ? '#c8361d' : '#1d1a16';
+      if (show) { const label = `《${b?.title ?? ''}》`; x.font = `${isF ? 900 : 500} ${isF ? 17 : 13}px "Noto Serif SC", serif`; x.fillStyle = isF ? '#c8361d' : '#1d1a16';
         const txt = label.length > 14 ? label.slice(0, 13) + '…' : label; const w = x.measureText(txt).width, right = mobile() ? W : W - 360;
         const lx = sx + r + 8 + w > right - 10 ? sx - r - 8 - w : sx + r + 8;
         x.fillStyle = 'rgba(239,231,214,.9)'; x.fillRect(lx - 4, sy - 12, w + 8, 22); x.fillStyle = isF ? '#c8361d' : '#1d1a16'; x.fillText(txt, lx, sy + 5); } });
   }
   return {
     show(letters: Letter[]) {
-      resize(); const before = nodes.length; nodes = layoutLetters(letters, sim); buildWeb();
+      resize(); const before = nodes.length; nodes = layoutLetters(letters, weight); buildWeb();
       const now = performance.now(); nodes.forEach((_, i) => { if (i >= before && before > 0) born.set(i, now); else if (!born.has(i)) born.set(i, now + i * 260); });
       setFocus(nodes.length - 1, false); const fN = nodes[focus], cx = mobile() ? fN.x * 0.6 : nodes.reduce((a, n) => a + n.x, 0) / nodes.length, cy = mobile() ? fN.y * 0.6 : nodes.reduce((a, n) => a + n.y, 0) / nodes.length; cam.x = cam.tx = cx; cam.y = cam.ty = cy;
       if (!raf) raf = requestAnimationFrame(frame);

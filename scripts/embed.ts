@@ -12,7 +12,7 @@ const fe = await pipeline('feature-extraction', MODEL, { dtype: 'q8' });
 const emb = async (t: string) => Array.from((await fe(t, { pooling: POOL, normalize: true })).data as Float32Array);
 const V: number[][] = [];
 for (const b of books) {
-  const a = await emb(`《${b.title}》${b.author ?? ''}，${b.country ?? ''}。适合：${situations(b).map(x => x.s).join('；')}。${b.hook}`);
+  const a = await emb(`《${b.title}》${b.author ?? ''}，${b.country ?? ''}。适合：${((b as Book & { situations?: { s: string }[] }).situations ?? situations(b)).map(x => x.s).join('；')}。${b.hook}`);
   const c = await emb(`${b.title}。${b.summary.slice(0, 450)}`);
   V.push(a.map((x, k) => (x + c[k]) / 2));
 }
