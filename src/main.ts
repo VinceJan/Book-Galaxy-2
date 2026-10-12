@@ -7,6 +7,7 @@ import { composeLetter, methodLine, rewrite, isSleeping } from './letter';
 import { stampFor } from './obscurity';
 import { expand } from './expand';
 import { isSafe } from './situations';
+import { keywordCheck, embedCheck, SEEDS, HOTLINES, type SafetyKind } from './safety';
 import { loadLetters, saveLetter } from './store';
 import { mountArchive } from './archive';
 import type { Book, Letter, Para } from './types';
@@ -59,8 +60,40 @@ async function search(note: string): Promise<{ hits: Hit[]; via: 'semantic' | 'l
   return { hits: rank(hybrid(null, lex, exp), books, { exclude }), via: 'lexical' };
 }
 
+let seedVecs: Record<string, Float32Array[]> | null = null;
+async function classify(note: string): Promise<SafetyKind> {
+  const k = keywordCheck(note); if (k !== 'ok' || state !== 'ready') return k;
+  seedVecs ??= Object.fromEntries(await Promise.all(Object.entries(SEEDS).map(async ([c, v]) => [c, await Promise.all(v.map(t => embed(model, t)))])));
+  return embedCheck(await embed(model, note), seedVecs!);
+}
+const SPECIAL: Record<Exclude<SafetyKind, 'ok'>, Para[]> = {
+  crisis: [
+    { k: 'say', t: '这张纸条我读了两遍。今晚我不给你推荐书了——你比任何一本书都要紧。' },
+    { k: 'say', t: '如果你正在想伤害自己，请现在就找一个真人说说话。下面这些电话有人在接，说什么都可以，哪怕只是哭。' },
+    { k: 'say', t: '如果你身边有信得过的人，也可以把这张纸条给他看。等你好一点了，书库还在这里，我也还在值班。' },
+  ],
+  harm: [
+    { k: 'say', t: '这张纸条我不能接。馆里的书是用来让人活得更明白的，不是用来伤人的。' },
+    { k: 'say', t: '如果你正被什么人或事逼到墙角，愤怒是真的，但请先找人说出来；遇到危险请拨 110。换一张纸条，我们重新来。' },
+  ],
+  sexual: [
+    { k: 'say', t: '这类书夜班馆员不经手。不是嫌弃你，是这张桌子有它的规矩。' },
+    { k: 'say', t: '如果你想读的是爱情、欲望和人怎样靠近彼此，换个说法再写一张，我会认真去找。' },
+  ],
+};
+function renderSpecial(kind: Exclude<SafetyKind, 'ok'>, note: string) {
+  $('blank').hidden = true; const el = $('letter'); el.hidden = false; el.classList.add('special'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  $('to').textContent = kind === 'crisis' ? '给你 · 现在' : '夜班馆员 · 退回的纸条';
+  const stamp = $('stamp'); stamp.className = 'stamp'; stamp.innerHTML = '';
+  ['sign', 'card'].forEach(id => $(id).classList.remove('on')); el.querySelector('.actions')!.classList.remove('on');
+  $('card').innerHTML = kind === 'crisis' ? `<div class="help"><div class="cno">有人在接电话</div><ul>${HOTLINES.map(h => `<li><a href="tel:${h.tel.split(' ')[0].replace(/-/g, '')}"><b>${h.tel}</b></a><span>${h.name}${h.note ? ` · ${h.note}` : ''}</span></li>`).join('')}</ul><p class="method">号码核对于 2026-10-13：12356 见国家卫健委通知；希望24热线见 hope9995.com；北京心理援助热线见 crisis.org.cn。</p></div>` : '';
+  typeOut([{ k: 'note', t: note }, ...SPECIAL[kind]], () => { $('sign').classList.add('on'); $('card').classList.add('on'); if (kind !== 'crisis') el.querySelector('.actions')!.classList.add('on'); });
+}
+
 async function ask(again?: string) {
   const note = (again ?? q.value).trim() || '随便给我一本，我信你';
+  const kind = await classify(note); if (kind !== 'ok') { lastHits = []; lastNote = ''; return renderSpecial(kind, note); }
+  $('letter').classList.remove('special');
   if (note !== lastNote || !lastHits.length) { const r = await search(note); lastHits = r.hits; lastVia = r.via; cursor = 0; lastNote = note; }
   const hit = lastHits[cursor++ % Math.max(1, lastHits.length)]; if (!hit) return;
   const b = hit.book; given.add(b.id);

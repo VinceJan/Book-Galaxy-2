@@ -150,3 +150,16 @@ textarea{font-size:19px}
   .body p.say{font-size:16.5px}
   .card{grid-template-columns:70px minmax(0,1fr)}.cover{width:70px;height:102px}
 }
+
+/* safety letters */
+.letter.special .stamp{display:none}
+.help ul{list-style:none;padding:0;margin:6px 0 0}.help li{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px dotted var(--rule)}
+.help li a{text-decoration:none;color:var(--red);font:500 22px var(--mono);letter-spacing:.04em}.help li span{font:14px var(--kai);color:var(--ink2)}
+.letter.special .card{grid-template-columns:1fr}
+/* mobile v3: composer is a compact strip above the letter — never overlaps it, never pushed below it */
+@media (max-width:820px){
+  .compose{order:0;position:static;border-top:0;border-bottom:1px solid var(--ink);padding:12px 16px 14px}
+  .compose textarea{height:52px}
+  body.has-letter .compose textarea{height:40px;font-size:16px}
+  .table{order:1;min-height:auto;padding-top:18px}
+}
