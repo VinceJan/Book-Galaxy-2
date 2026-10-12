@@ -30,7 +30,7 @@ export const isSleeping = (b: Book) => (b.obscurity.zhViews ?? 0) < 3000 && b.ob
 /** Whole sentences from the catalog summary (never cut mid-sentence), cleaned of foreign-name parentheticals. */
 export function excerpt(b: Pick<Book, 'summary' | 'hook'>, min = 70, max = 200, focus?: string): string {
   const src = cleanQuote((b.summary || b.hook || '').trim()); if (!src) return '';
-  let sents = src.match(/[^。！？!?]+[。！？!?」”]*/g) ?? [src]; let out = '';
+  let sents: string[] = src.match(/[^。！？!?]+[。！？!?」”]*/g) ?? [src]; let out = '';
   // When the letter claims a situation, start the quote at the sentence that proves it (so the evidence is visible).
   if (focus) { const k = sents.findIndex(x => x.includes(focus) && safeSentence(x)); if (k > 0) sents = [sents[0], ...sents.slice(k)].filter((x, i, a) => i === 0 ? a.length === 1 || x.length < 80 : true); }
   for (const s of sents) { if (!safeSentence(s)) { if (out) break; continue; } if (out && out.length + s.length > max) break; out += s; if (out.length >= min) break; }
