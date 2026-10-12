@@ -37,7 +37,7 @@ for (const m of Object.keys(MODELS) as (keyof typeof MODELS)[]) { if (ONLY.lengt
         const sims = mode === 'vector' ? vs : mode === 'hybrid' ? hybrid(vs, lx, ex, { v: 1, l: +(process.env.WL ?? 0.35), e: +(process.env.WE ?? 0.6) }) : hybrid(null, lx, ex);
         const pure = rank(sims, books, { lambda: 0, exclude: safe }).slice(0, 5); const hits = rank(sims, books, { exclude: safe });
         r.bad += +(forbid[q] ?? []).some(t => hits[0].book.title === t);
-        r.h1 += +ok(q, hits[0].book); r.h3 += +hits.slice(0, 3).some(h => ok(q, h.book)); r.p3 += hits.slice(0, 3).filter(h => ok(q, h.book)).length / 3; r.rel5 += +pure.some(h => ok(q, h.book));
+        r.h1 += +ok(q, hits[0].book); if (process.env.PRINTSIM && mode === 'hybrid') console.log('SIM', ok(q, hits[0].book) ? 1 : 0, hits[0].sim.toFixed(3), (hits[0].sim - hits[1].sim).toFixed(3), q); r.h3 += +hits.slice(0, 3).some(h => ok(q, h.book)); r.p3 += hits.slice(0, 3).filter(h => ok(q, h.book)).length / 3; r.rel5 += +pure.some(h => ok(q, h.book));
         if (process.env.SHOW && m === process.env.SHOW && t === (process.env.SHOWT || 'situ') && mode === (process.env.SHOWM || 'hybrid')) console.log(q, '→', hits.slice(0, 3).map(h => (ok(q, h.book) ? '✓' : '✗') + h.book.title).join(' '));
       }
       const n = Object.keys(notes).length; res[`${m}/${t}/${mode}`] = { h1: +(r.h1 / n).toFixed(3), h3: +(r.h3 / n).toFixed(3), p3: +(r.p3 / n).toFixed(3), rel5: +(r.rel5 / n).toFixed(3), forbiddenTop1: r.bad };

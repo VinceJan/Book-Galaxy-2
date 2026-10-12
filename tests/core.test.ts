@@ -56,7 +56,16 @@ describe('letter', () => {
     for (const b of books) expect(excerpt(b)).not.toMatch(UNSAFE);
   });
   it('cleanQuote strips foreign-name parentheticals', () => { expect(cleanQuote('《目标》（英语：The Goal）是一本书')).toBe('《目标》是一本书'); });
-  it('low-confidence letters say so honestly', () => { expect(composeLetter('最近在学下棋', books[0], byId, false)[1].t).toContain('没有一本是专门写这个的'); });
+  it('low-confidence letters say so honestly and offer alternatives; no sleeping claim', () => {
+    const p = composeLetter('最近在学下棋', books[0], byId, { level: 'low', alternatives: [books[1], books[2]] });
+    expect(p[1].t).toContain('这次没找准'); expect(p.at(-1)!.t).toContain(books[1].title); expect(p.some(x => x.t.includes('点开过'))).toBe(false);
+  });
+  it('de-templated: banned stock phrases never appear; openings rotate', () => {
+    const opens = new Set<string>();
+    for (const b of books.slice(0, 300)) { const t = composeLetter('随便来一本' + b.id, b, byId).map(x => x.t).join(''); opens.add(composeLetter('随便来一本' + b.id, b, byId)[1].t);
+      expect(t).not.toMatch(/我没去畅销榜那一排|它正合适|如果你此刻|早 ?\d+ ?年|都在路上|逐一比对/); }
+    expect(opens.size).toBeGreaterThanOrEqual(5);
+  });
 });
 describe('archive', () => {
   const L = (i: number, bookId: string): Letter => ({ id: 'l' + i, at: '', note: '', bookId, paragraphs: [], via: 'semantic', parentId: null });

@@ -3,7 +3,7 @@ import './style.css';
 import { loadAll, coverUrl } from './data';
 import { centre, dot, rank, lexicalSims, expansionScores, hybrid, type Hit } from './retrieve';
 import { loadEmbedder, embed, type ModelInfo } from './embedder';
-import { composeLetter, methodLine, rewrite, isSleeping } from './letter';
+import { composeLetter, methodLine, rewrite, isSleeping, type Confidence } from './letter';
 import { stampFor } from './obscurity';
 import { expand } from './expand';
 import { isSafe } from './situations';
@@ -16,6 +16,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const PROMPTS = ['想逃离城市一阵子', '和父亲很久没说话了', '对工作失去了意义感', '想读点让人害怕的', '失恋了，但不想被安慰', '好奇宇宙到底有多大'];
 const FAST = new URLSearchParams(location.search).has('fast');
+/** Scoring hooks for reviewers: window.__bg.lastHits = top-3 book ids of the last recommendation. */
+const bg: { lastHits: string[]; [k: string]: unknown } = ((window as unknown as { __bg: typeof bg }).__bg = { lastHits: [] });
 
 const { cat, byId, index, meta } = await loadAll();
 const model: ModelInfo = { model: meta.model, pooling: meta.pooling ?? 'mean', queryPrefix: meta.queryPrefix ?? '' };
@@ -82,7 +84,7 @@ const SPECIAL: Record<Exclude<SafetyKind, 'ok'>, Para[]> = {
   ],
 };
 function renderSpecial(kind: Exclude<SafetyKind, 'ok'>, note: string) {
-  $('blank').hidden = true; const el = $('letter'); el.hidden = false; el.classList.add('special'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  $('blank').hidden = true; const el = $('letter'); el.dataset.mode = kind === 'crisis' ? 'care' : 'decline'; delete el.dataset.stamp; bg.lastHits = []; el.hidden = false; el.classList.add('special'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   $('to').textContent = kind === 'crisis' ? '给你 · 现在' : '夜班馆员 · 退回的纸条';
   const stamp = $('stamp'); stamp.className = 'stamp'; stamp.innerHTML = '';
   ['sign', 'card'].forEach(id => $(id).classList.remove('on')); el.querySelector('.actions')!.classList.remove('on');
@@ -97,21 +99,27 @@ async function ask(again?: string) {
   if (note !== lastNote || !lastHits.length) { const r = await search(note); lastHits = r.hits; lastVia = r.via; cursor = 0; lastNote = note; }
   const hit = lastHits[cursor++ % Math.max(1, lastHits.length)]; if (!hit) return;
   const b = hit.book; given.add(b.id);
-  let paras = composeLetter(note, b, byId, confident);
+  // Relevance confidence (thresholds calibrated on eval/notes.json top-1 hybrid scores; see eval/run.ts PRINTSIM).
+  const [hi, lo] = lastVia === 'semantic' ? [8, 7] : [5, 3.5];
+  const top = lastHits[0]?.sim ?? 0;
+  const conf: Confidence = { level: !confident || top < lo ? 'low' : top >= hi ? 'high' : 'mid', alternatives: lastHits.filter(h => h.book.id !== b.id).slice(0, 2).map(h => h.book) };
+  bg.lastHits = lastHits.slice(0, 3).map(h => h.book.id);
+  let paras = composeLetter(note, b, byId, conf);
   paras = await rewrite(paras, { note, book: { title: b.title, author: b.author, year: b.year, summary: b.summary.slice(0, 400) } });
   const prev = loadLetters();
   const letter: Letter = { id: crypto.randomUUID?.() ?? String(Date.now()), at: new Date().toISOString(), note, bookId: b.id, paragraphs: paras, via: lastVia, parentId: prev.at(-1)?.id ?? null };
   const all = saveLetter(letter); $('count').textContent = String(all.length);
   document.body.classList.add('has-letter');
-  render(letter, b, all.length);
+  render(letter, b, all.length, conf);
 }
 
-function render(l: Letter, b: Book, n: number) {
+function render(l: Letter, b: Book, n: number, conf: Confidence) {
   $('blank').hidden = true; const el = $('letter'); el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   if (innerWidth < 820) scrollTo({ top: 0, behavior: FAST ? 'auto' : 'smooth' });
   const d = new Date(l.at);
   $('to').textContent = `第 ${n} 封 · ${d.toLocaleDateString('zh-CN')} ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-  const st = stampFor(b), stamp = $('stamp');
+  const st = conf.level === 'high' ? stampFor(b) : { label: '借出', awake: false }, stamp = $('stamp');
+  el.dataset.mode = 'recommend'; el.dataset.stamp = st.label; el.dataset.confidence = conf.level;
   stamp.className = 'stamp' + (st.awake ? '' : ' cool'); stamp.innerHTML = `${st.label}<small>${d.toISOString().slice(0, 10).replace(/-/g, '.')}</small>`;
   ['sign', 'card'].forEach(id => $(id).classList.remove('on')); el.querySelector('.actions')!.classList.remove('on');
   $('card').innerHTML = card(b, l.via);
@@ -151,4 +159,4 @@ function route() {
   if (r === 'archive') archive.show(loadLetters());
 }
 addEventListener('hashchange', route); route();
-(window as unknown as { __bg: unknown }).__bg = { ask, ready: () => state === 'ready', state: () => state };
+Object.assign(bg, { ask, ready: () => state === 'ready', state: () => state });

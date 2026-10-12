@@ -2,8 +2,8 @@
  *  (cosine to seed phrases, same model as retrieval) once the model is ready. */
 export type SafetyKind = 'ok' | 'crisis' | 'harm' | 'sexual';
 const KW: Record<Exclude<SafetyKind, 'ok'>, RegExp> = {
-  crisis: /不想活|一了百了|不想再醒|想消失|消失就好|没有我会更好|我是.{0,4}累赘|撑不住了|生无可恋|活够了|离开这个世界|活着没意思|活不下去|想死|去死|自杀|轻生|结束(自己的)?生命|了结自己|割腕|跳楼|跳河|上吊|安眠药.{0,6}(吃|吞)|吞药|自残|伤害自己|不如死|死了算了|没有活下去|撑不下去了|kill myself|suicid|end my life|want to die|self[- ]?harm|cut myself|don'?t want to live|no reason to live|end it all|want to end it|better off dead/i,
-  harm: /炸弹|爆破|炸掉|炸毁|配.{0,4}毒|隐蔽致命.{0,4}毒|炸药|爆炸物|制[造作].{0,4}(枪|炸|毒|武器)|雷管|土制|毒药.{0,4}(怎么|如何|配方)|下毒|投毒|杀[人掉死]|怎么杀|报复社会|恐怖袭击|制毒|冰毒|贩毒|洗钱|黑客.{0,4}(入侵|攻击)|偷.{0,3}(车|钱)|绑架|bomb|explosive|make a gun|how to kill|poison someone|meth|terror(ist)? attack|hack into/i,
+  crisis: /不想活|一了百了|不想再醒|想消失|消失就好|没有我会更好|我是.{0,4}累赘|撑不住了|生无可恋|活够了|离开这个世界|活着没意思|活不下去|我.{0,3}想死|想去死|(我|想|要|打算|准备)(要|想|去)?(自杀|轻生)|结束(自己的|我的)生命|了结自己|割腕|我.{0,6}(跳楼|跳河|上吊)|(吃|吞).{0,4}安眠药|吞药|自残|伤害自己|不如死了|死了算了|没有活下去|kill myself|\b(i|i'm|im|i am)\b.{0,20}suicid|end my life|want to die|self[- ]?harm|cut myself|don'?t want to live|no reason to live|end it all|want to end it|better off dead/i,
+  harm: /(怎么|如何|教我|教教我|方法|步骤|配方|自制|制作|制造|做一?个?).{0,8}(炸弹|炸药|爆炸物|雷管|枪支?|毒药|冰毒|武器|爆破)|我(要|想|打算).{0,4}(杀了?|炸|毒死|弄死|报复)|下毒|投毒|毒死.{0,4}(人|他|她)|报复社会|隐蔽致命.{0,4}毒|(怎么|如何).{0,6}(贩毒|洗钱|绑架|入侵)|how to (make|build) (a )?(bomb|gun|explosive)|how to kill|poison (someone|my)|make meth|terror(ist)? attack|hack into/i,
   sexual: /色情|成人(内容|视频|电影|书|漫画)|很黄|黄色|露骨|黄书|黄色小说|做爱|性交|性爱|口交|自慰|裸照|淫|成人小说|av片|porn|erotic|sex scene|nude|hentai|nsfw/i,
 };
 export const SEEDS: Record<Exclude<SafetyKind, 'ok'> | 'ok', string[]> = {
