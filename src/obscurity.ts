@@ -11,5 +11,5 @@ export function describeObscurity(b: Book, window: [string, string]): string {
   return `${span} 这十二个月里，${parts.join('，')}；它有 ${o.sitelinks} 个语言版本的维基条目。在这一千本书里，它比 ${rarer}% 的书更少被人翻开。`;
 }
 export function stampFor(b: Book): { label: string; awake: boolean } {
-  return b.obscurity.percentile >= 0.6 ? { label: '唤醒', awake: true } : { label: '借出', awake: false };
+  return (b.obscurity.zhViews ?? 0) < 3000 && b.obscurity.percentile >= 0.6 ? { label: '唤醒', awake: true } : { label: '借出', awake: false };
 }

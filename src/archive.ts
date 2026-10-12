@@ -9,7 +9,7 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   let nodes: Node[] = [], focus = 0, W = 0, H = 0, born = new Map<number, number>();
   const cam = { x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1 };
   const mobile = () => W < 820;
-  const ox = () => (mobile() ? W / 2 : (W - 360) / 2), oy = () => (mobile() ? H * 0.3 : H / 2);
+  const ox = () => (mobile() ? W / 2 : (W - 360) / 2), oy = () => (mobile() ? H * 0.36 : H / 2);
   const toScreen = (n: Node) => [(n.x - cam.x) * cam.z + ox(), (n.y - cam.y) * cam.z + oy()];
   function resize() { const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; x.setTransform(d, 0, 0, d, 0, 0); }
   addEventListener('resize', resize);
@@ -20,7 +20,7 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
     if (!L.length) { side.innerHTML = `<p class="k">archive of letters</p><div class="n">0<small>封回信</small></div><div class="focus empty-arch">还没有回信。<br><a href="#/">先去写一张纸条 →</a></div>`; return; }
     const f = nodes[focus].letter, b = f && byId.get(f.bookId);
     const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-    side.innerHTML = `<p class="k">archive of letters</p><div class="n">${L.length}<small>封回信 · ${L.length} 缕菌丝</small></div>
+    side.innerHTML = `<p class="k">archive of letters</p><div class="n">${L.length}<small>封回信 · ${L.length} 缕菌丝 · ${web.length} 条主题丝线</small></div>
     <div class="focus">${b && f ? `<h3>《${esc(b.title)}》</h3><div class="when">${new Date(f.at).toLocaleString('zh-CN')} · ${f.via === 'semantic' ? '语义检索' : '字面检索'}</div><div class="nt">“${esc(f.note)}”</div><p class="hk">${esc(b.hook)}</p>`
       : `<h3>你</h3><p class="hk">所有回信都从这里长出去。相近的书会接在彼此身上，走远的书会另起一缕。</p>`}</div>
     <ol>${nodes.slice(1).map((n, i) => `<li data-i="${i + 1}" class="${i + 1 === focus ? 'on' : ''}"><i>${String(i + 1).padStart(2, '0')}</i>${esc(byId.get(n.letter!.bookId)?.title ?? '')}</li>`).reverse().join('')}</ol>`;
@@ -43,13 +43,23 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
 
   const ease = (t: number) => 1 - Math.pow(1 - t, 3);
   const q = (a: number, b: number, c: number, d: number, e: number, f: number, t: number) => { const u = 1 - t; return [u * u * a + 2 * u * t * c + t * t * e, u * u * b + 2 * u * t * d + t * t * f]; };
+  const GENERIC = /世纪作品|文学$|文本叙事|作品语境/;
+  let web: [number, number, string][] = [];
+  function buildWeb() { web = []; for (let i = 1; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+    if (nodes[j].parent === i || nodes[i].parent === j) continue;
+    const a = byId.get(nodes[i].letter!.bookId), b = byId.get(nodes[j].letter!.bookId); if (!a || !b) continue;
+    const t = a.themes.find(x => !GENERIC.test(x) && b.themes.includes(x)); if (t) web.push([i, j, t]); } }
   let raf = 0;
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     cam.x += (cam.tx - cam.x) * 0.08; cam.y += (cam.ty - cam.y) * 0.08; cam.z += (cam.tz - cam.z) * 0.12;
     x.clearRect(0, 0, W, H);
-    const near = firstDegree(nodes, focus);
     const prog = (i: number) => Math.min(1, (now - (born.get(i) ?? -1e9)) / 1400);
+    const near = firstDegree(nodes, focus); web.forEach(([a, b]) => { if (a === focus) near.add(b); if (b === focus) near.add(a); });
+    // theme web: thin threads between letters whose books share a (non-generic) theme
+    web.forEach(([a, b, t]) => { if (prog(a) < 1 || prog(b) < 1) return; const [ax, ay] = toScreen(nodes[a]), [bx, by] = toScreen(nodes[b]); const hot = a === focus || b === focus;
+      x.setLineDash([2, 4]); x.lineWidth = hot ? 1.2 : 0.7; x.strokeStyle = hot ? 'rgba(200,54,29,.7)' : 'rgba(29,26,22,.22)'; x.beginPath(); x.moveTo(ax, ay); x.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - 30 * cam.z, bx, by); x.stroke(); x.setLineDash([]);
+      if (hot) { x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = 'rgba(200,54,29,.85)'; x.fillText(t, (ax + bx) / 2 + 4, (ay + by) / 2 - 16 * cam.z); } });
     nodes.forEach((n, i) => { if (n.parent < 0) return; const p = nodes[n.parent]; const t = ease(prog(i)); const [ax, ay] = toScreen(p), [bx, by] = toScreen(n);
       const h = hash(n.id), bend = ((h % 100) / 100 - 0.5) * 0.6, mx = (ax + bx) / 2 - (by - ay) * bend, my = (ay + by) / 2 + (bx - ax) * bend;
       const hot = near.has(i) && near.has(n.parent), steps = 36, lim = Math.floor(steps * t);
@@ -65,13 +75,15 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
       else { x.fillStyle = isF ? '#c8361d' : '#1d1a16'; x.fill(); }
       if (isF) { x.beginPath(); x.arc(sx, sy, r + 6 + Math.sin(now / 500) * 1.5, 0, 7); x.strokeStyle = 'rgba(200,54,29,.35)'; x.lineWidth = 1; x.stroke(); }
       if (show) { const label = i === 0 ? '你' : `《${b?.title ?? ''}》`; x.font = `${isF ? 900 : 500} ${isF ? 17 : 13}px "Noto Serif SC", serif`; x.fillStyle = isF ? '#c8361d' : '#1d1a16';
-        const txt = label.length > 14 ? label.slice(0, 13) + '…' : label; x.fillText(txt, sx + r + 8, sy + 5); } });
+        const txt = label.length > 14 ? label.slice(0, 13) + '…' : label; const w = x.measureText(txt).width, right = mobile() ? W : W - 360;
+        const lx = sx + r + 8 + w > right - 10 ? sx - r - 8 - w : sx + r + 8;
+        x.fillStyle = 'rgba(239,231,214,.9)'; x.fillRect(lx - 4, sy - 12, w + 8, 22); x.fillStyle = isF ? '#c8361d' : '#1d1a16'; x.fillText(txt, lx, sy + 5); } });
   }
   return {
     show(letters: Letter[]) {
-      resize(); const before = nodes.length; nodes = layoutLetters(letters, sim);
+      resize(); const before = nodes.length; nodes = layoutLetters(letters, sim); buildWeb();
       const now = performance.now(); nodes.forEach((_, i) => { if (i >= before && before > 0) born.set(i, now); else if (!born.has(i)) born.set(i, now + i * 260); });
-      setFocus(nodes.length - 1, false); const cx = nodes.reduce((a, n) => a + n.x, 0) / nodes.length, cy = nodes.reduce((a, n) => a + n.y, 0) / nodes.length; cam.x = cam.tx = cx; cam.y = cam.ty = cy;
+      setFocus(nodes.length - 1, false); const fN = nodes[focus], cx = mobile() ? fN.x * 0.6 : nodes.reduce((a, n) => a + n.x, 0) / nodes.length, cy = mobile() ? fN.y * 0.6 : nodes.reduce((a, n) => a + n.y, 0) / nodes.length; cam.x = cam.tx = cx; cam.y = cam.ty = cy;
       if (!raf) raf = requestAnimationFrame(frame);
     },
   };

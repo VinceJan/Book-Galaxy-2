@@ -14,7 +14,7 @@ const books = cat.books.map(b => { const o = obs.books[b.id];
     originalTitle: b.originalTitle || null, summary: b.summary || '', hook: b.hook || '', themes: (b.themes || []).filter(t => t !== '文本叙事' && t !== '作品语境'),
     cover: localCover(b) || b.coverUrl || null, sourceUrl: b.sourceUrl, wikidataUrl: b.wikidataUrl,
     obscurity: { score, zhViews: o.zhViews, enViews: o.enViews, sitelinks: o.sitelinks },
-    links: (rel[b.id] || []).sort((x, y) => y.weight - x.weight).slice(0, 6).map(r => ({ id: r.target, kind: r.kind, band: r.bandByBook?.[b.id] || null, sharedThemes: r.evidence?.sharedThemes || [], similarity: r.similarity })) }; });
+    links: (rel[b.id] || []).sort((x, y) => y.weight - x.weight).slice(0, 6).map(r => ({ id: r.target, kind: r.kind, band: r.bandByBook?.[b.id] || null, sharedThemes: r.evidence?.sharedThemes || [], similarity: r.similarity, sentence: r.sentence })) }; });
 const sorted = [...books].sort((a, b) => a.obscurity.score - b.obscurity.score); sorted.forEach((b, i) => (b.obscurity.percentile = +(i / (books.length - 1)).toFixed(3)));
 fs.writeFileSync('public/data/books.json', JSON.stringify({ generatedAt: new Date().toISOString(), source: cat.source, obscuritySource: { method: obs.source, window: obs.window, fetchedAt: obs.fetchedAt, formula: 'score = 0.7*(1-pct(log1p(zhViews+enViews))) + 0.3*(1-pct(sitelinks))' }, books }));
 console.log(books.length, 'covers local:', books.filter(b => b.cover?.startsWith('covers/')).length, 'remote:', books.filter(b => b.cover?.startsWith('http')).length);

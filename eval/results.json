@@ -1,0 +1,16 @@
+{
+ "bgezh/situ/vector": {
+  "h1": 0.531,
+  "h3": 0.719,
+  "p3": 0.437,
+  "rel5": 0.781,
+  "forbiddenTop1": 1
+ },
+ "bgezh/situ/hybrid": {
+  "h1": 0.719,
+  "h3": 0.938,
+  "p3": 0.615,
+  "rel5": 0.969,
+  "forbiddenTop1": 0
+ }
+}

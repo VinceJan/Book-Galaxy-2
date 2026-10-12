@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { rank, centre, dot, lexicalSims, bigrams } from '../src/retrieve';
-import { composeLetter, excerpt } from '../src/letter';
-import { describeObscurity } from '../src/obscurity';
+import { composeLetter, excerpt, humanCount, isSleeping } from '../src/letter';
+import { stampFor } from '../src/obscurity';
+import { isSafe, UNSAFE, cleanQuote } from '../src/situations';
 import { layoutLetters, firstDegree } from '../src/layout';
 import { loadLetters, saveLetter } from '../src/store';
 import type { Catalog, VecMeta, Letter } from '../src/types';
@@ -37,13 +38,25 @@ describe('retrieval', () => {
   it('lexical fallback finds a title', () => { expect(bigrams('西游记')).toEqual(['西游', '游记']); const s = lexicalSims('西游记', books); expect(books[s.indexOf(Math.max(...s))].title).toContain('西游'); });
 });
 describe('letter', () => {
-  it('quotes only catalog data and never truncates the hook', () => {
-    const b = books.find(x => x.hook.length > 60)!; const p = composeLetter('测试', b, byId, cat.obscuritySource.window, 'semantic');
-    const all = p.map(x => x.t).join('');
-    const ex = excerpt(b); expect(all).toContain(ex); expect(b.summary.includes(ex) || b.hook.includes(ex)).toBe(true); expect(ex).toMatch(/[。！？!?」”]$/); expect(all).toContain(b.title); expect(all).not.toMatch(/睡了|沉睡 \d/);
-    if (b.obscurity.zhViews) expect(all).toContain(b.obscurity.zhViews.toLocaleString('zh-CN'));
+  it('quotes whole, clean sentences from the description and only real titles', () => {
+    for (const b of books.slice(0, 200)) {
+      const p = composeLetter('最近很累', b, byId); const all = p.map(x => x.t).join('');
+      const ex = excerpt(b); if (ex) { expect(all).toContain(ex); expect(ex).not.toMatch(/[（(][^）)]{0,6}语[：:]/); expect(ex).toMatch(/[。！？!?」”]$/); }
+      for (const m of all.matchAll(/《([^》]+)》/g)) expect(books.some(x => x.title === m[1]) || b.summary.includes(m[0]) || b.links.some(l => l.sentence?.includes(m[0]))).toBe(true);
+      expect(all).not.toMatch(/归在|逐一比对|美国文学|20世纪作品/);
+    }
   });
-  it('obscurity text handles missing zh article', () => { const b = { ...books[0], obscurity: { ...books[0].obscurity, zhViews: 0 } }; expect(describeObscurity(b, ['20251001', '20260930'])).toContain('没有它被浏览的记录'); });
+  it('human count only for genuinely sleeping books', () => {
+    expect(humanCount(573)).toBe('五百来'); expect(humanCount(1840)).toBe('一千八百来'); expect(humanCount(42)).toBe('不到一百');
+    const pb = books.find(b => b.title === '花花公子')!; expect(isSleeping(pb)).toBe(false); expect(stampFor(pb).label).toBe('借出');
+    const xyj = books.find(b => b.title === '西游记')!; expect(composeLetter('x', xyj, byId).some(p => p.t.includes('点开过'))).toBe(false);
+  });
+  it('safety: explicit premises never recommendable, explicit sentences never quoted', () => {
+    expect(isSafe(books.find(b => b.title === '花花公子')!)).toBe(false);
+    for (const b of books) expect(excerpt(b)).not.toMatch(UNSAFE);
+  });
+  it('cleanQuote strips foreign-name parentheticals', () => { expect(cleanQuote('《目标》（英语：The Goal）是一本书')).toBe('《目标》是一本书'); });
+  it('low-confidence letters say so honestly', () => { expect(composeLetter('最近在学下棋', books[0], byId, false)[1].t).toContain('没有一本是专门写这个的'); });
 });
 describe('archive', () => {
   const L = (i: number, bookId: string): Letter => ({ id: 'l' + i, at: '', note: '', bookId, paragraphs: [], via: 'semantic', parentId: null });
