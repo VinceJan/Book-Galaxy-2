@@ -17,7 +17,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 const PROMPTS = ['想逃离城市一阵子', '和父亲很久没说话了', '对工作失去了意义感', '想读点让人害怕的', '失恋了，但不想被安慰', '好奇宇宙到底有多大'];
 const FAST = new URLSearchParams(location.search).has('fast');
 /** Scoring hooks for reviewers: window.__bg.lastHits = top-3 book ids of the last recommendation. */
-const bg: { lastHits: string[]; [k: string]: unknown } = ((window as unknown as { __bg: typeof bg }).__bg = { lastHits: [] });
+const bg: { lastHits: string[]; [k: string]: unknown } = ((window as unknown as { __bg: typeof bg }).__bg = { lastHits: [], ready: () => false });
 
 const { cat, byId, index, meta } = await loadAll();
 const model: ModelInfo = { model: meta.model, pooling: meta.pooling ?? 'mean', queryPrefix: meta.queryPrefix ?? '' };
