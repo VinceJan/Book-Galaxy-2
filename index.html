@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>夜班馆员 · 书架星系 2.0</title>
+<meta name="description" content="给图书馆写一张纸条。夜班馆员会在一千本书里，替你找回一本很少被翻开的书。" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23c8361d'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23efe7d6' font-family='serif'>夜</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500;700;900&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@1,400;1,500&display=swap" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" />
+</head>
+<body>
+<header class="mast">
+  <a class="mark" href="#/">夜班<b>·</b>馆员</a>
+  <nav><a href="#/" data-r="desk">写纸条</a><a href="#/archive" data-r="archive">回信档案 <span id="count">0</span></a></nav>
+  <div class="meta" id="meta">书架星系 2.0 · 1000 本书</div>
+</header>
+<main id="desk" class="view desk-view">
+  <section class="compose">
+    <p class="kicker">NIGHT DESK · 今夜值班</p>
+    <h1>给图书馆<br />写一张<em>纸条</em>。</h1>
+    <p class="lede">不搜书名，不选分类。说说你此刻的处境——馆员会在一千本书里，替你找回一本很少被人翻开的。</p>
+    <form id="form">
+      <label class="sr" for="q">你的纸条</label>
+      <textarea id="q" rows="3" maxlength="200" placeholder="比如：最近总觉得自己在原地打转……"></textarea>
+      <div class="chips" id="chips"></div>
+      <div class="row"><button class="send" type="submit">投进还书口 <span>→</span></button><span class="engine" id="engine">馆员正在备好目录…</span></div>
+    </form>
+  </section>
+  <section class="table" id="table" aria-live="polite">
+    <div class="blank" id="blank" aria-hidden="true">
+      <div class="bc-head"><span>借 书 卡</span><span class="mono">No. ——</span></div>
+      <div class="bc-row"><i>书名</i><b></b></div><div class="bc-row"><i>著者</i><b></b></div><div class="bc-row"><i>年份</i><b></b></div>
+      <div class="bc-grid"><span>借出</span><span>归还</span><span>借出</span><span>归还</span><em></em><em></em><em></em><em></em><em></em><em></em><em></em><em></em></div>
+      <p class="bc-note">馆员在灯下等你的纸条</p>
+    </div>
+    <article class="letter" id="letter" hidden>
+      <div class="stamp" id="stamp"></div>
+      <div class="to mono" id="to"></div>
+      <div class="body" id="body"></div>
+      <div class="sign" id="sign">—— 夜班馆员</div>
+      <section class="card" id="card"></section>
+      <div class="actions"><button id="again" type="button">再要一本 ↻</button><a href="#/archive" id="toArchive">在档案里看它长出的那一缕 →</a></div>
+    </article>
+  </section>
+</main>
+<main id="archive" class="view archive-view" hidden>
+  <canvas id="cv" aria-label="回信档案的菌丝图"></canvas>
+  <div class="arch-title"><h2>回信档案</h2><p>每收到一封回信，就长出一缕菌丝。</p></div>
+  <aside class="arch-side" id="side"></aside>
+  <div class="zoom"><button data-z="1.25" aria-label="放大">＋</button><button data-z="0.8" aria-label="缩小">－</button><button data-z="0" aria-label="复位">○</button></div>
+</main>
+<footer class="foot mono" id="foot"></footer>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
