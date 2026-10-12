@@ -49,7 +49,7 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   const GENERIC = /世纪作品|文学$|文本叙事|作品语境/;
   let web: [number, number, string][] = [];
   function buildWeb() { web = []; for (const e of nodes.edges ?? []) { if (nodes[e.b].parent === e.a || nodes[e.a].parent === e.b) continue;
-    const a = byId.get(nodes[e.a].letter!.bookId), b = byId.get(nodes[e.b].letter!.bookId); const t = a && b ? a.themes.find(x => !GENERIC.test(x) && b.themes.includes(x)) ?? '' : ''; web.push([e.a, e.b, t]); } }
+    const a = byId.get(nodes[e.a].letter!.bookId), b = byId.get(nodes[e.b].letter!.bookId); const t = a && b ? a.themes.find(x => !GENERIC.test(x) && b.themes.includes(x)) ?? '' : ''; web.push([e.a, e.b, e.near && !t ? '~' : t]); } }
   let raf = 0;
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
@@ -59,8 +59,8 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
     const near = firstDegree(nodes, focus); web.forEach(([a, b]) => { if (a === focus) near.add(b); if (b === focus) near.add(a); });
     // theme web: thin threads between letters whose books share a (non-generic) theme
     web.forEach(([a, b, t]) => { if (prog(a) < 1 || prog(b) < 1) return; const [ax, ay] = toScreen(nodes[a]), [bx, by] = toScreen(nodes[b]); const hot = a === focus || b === focus;
-      x.setLineDash([2, 4]); x.lineWidth = hot ? 1.2 : 0.7; x.strokeStyle = hot ? 'rgba(200,54,29,.7)' : 'rgba(29,26,22,.22)'; x.beginPath(); x.moveTo(ax, ay); x.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - 30 * cam.z, bx, by); x.stroke(); x.setLineDash([]);
-      if (hot) { x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = 'rgba(200,54,29,.85)'; x.fillText(t, (ax + bx) / 2 + 4, (ay + by) / 2 - 16 * cam.z); } });
+      const nearOnly = web.length && t === '~'; x.setLineDash(nearOnly ? [1, 4] : [3, 4]); x.lineWidth = hot ? 1.3 : 1; x.strokeStyle = hot ? 'rgba(200,54,29,.75)' : nearOnly ? 'rgba(29,26,22,.3)' : 'rgba(29,26,22,.4)'; x.beginPath(); x.moveTo(ax, ay); x.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - 30 * cam.z, bx, by); x.stroke(); x.setLineDash([]);
+      if (hot && t !== '~') { x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = 'rgba(200,54,29,.85)'; x.fillText(t, (ax + bx) / 2 + 4, (ay + by) / 2 - 16 * cam.z); } });
     nodes.forEach((n, i) => { if (n.parent < 0) return; const p = nodes[n.parent]; const t = ease(prog(i)); const [ax, ay] = toScreen(p), [bx, by] = toScreen(n);
       const h = hash(n.id), bend = ((h % 100) / 100 - 0.5) * 0.6, mx = (ax + bx) / 2 - (by - ay) * bend, my = (ay + by) / 2 + (bx - ax) * bend;
       const hot = near.has(i) && near.has(n.parent), steps = 36, lim = Math.floor(steps * t);

@@ -12,12 +12,15 @@ const PKG = process.env.BG_PKG || '/workspace/book-galaxy-data';
 const pkg = Object.fromEntries(JSON.parse(fs.readFileSync(`${PKG}/dist/books.json`, 'utf8')).books.map(b => [b.id, b]));
 const pkgMeta = JSON.parse(fs.readFileSync(`${PKG}/dist/books.json`, 'utf8')).meta;
 const covers = fs.existsSync('scripts/raw/covers.index.json') ? JSON.parse(fs.readFileSync('scripts/raw/covers.index.json', 'utf8')).covers : {};
+const reject = fs.existsSync('scripts/raw/covers.reject.json') ? JSON.parse(fs.readFileSync('scripts/raw/covers.reject.json', 'utf8')) : {};
+for (const id of Object.keys(reject)) delete covers[id]; // illegible (near-black, no detail) → title placeholder
 const strong = {}; for (const r of JSON.parse(fs.readFileSync(`${PKG}/dist/relations.json`, 'utf8')).relations) if (r.quality?.strong) { (strong[r.source] ||= []).push({ id: r.target, sentence: r.sentence, type: r.type }); (strong[r.target] ||= []).push({ id: r.source, sentence: r.sentence, type: r.type }); }
 const localCover = b => { for (const ext of ['jpg', 'png', 'webp']) { const p = `covers/${b.id}.${ext}`; if (fs.existsSync(`${V1}/public/${p}`)) { fs.mkdirSync('public/covers', { recursive: true }); fs.copyFileSync(`${V1}/public/${p}`, `public/${p}`); return p; } } return null; };
+const gender = fs.existsSync('scripts/raw/gender.json') ? JSON.parse(fs.readFileSync('scripts/raw/gender.json', 'utf8')) : {};
 const books = cat.books.map(b => { const o = obs.books[b.id];
   const score = +(0.7 * (1 - pV(Math.log1p(views(b.id)))) + 0.3 * (1 - pS(o.sitelinks))).toFixed(4);
   const P = pkg[b.id] || {}; const cv = covers[b.id];
-  return { id: b.id, title: P.title || b.title, author: P.authors?.map(a => a.name).join('、') || b.author || null, year: P.year ?? b.year ?? null, country: P.country || b.country || null, language: P.language || b.language || null,
+  return { id: b.id, title: P.title || b.title, author: P.authors?.map(a => a.name).join('、') || b.author || null, authorGender: [...new Set((P.authors || []).map(a => gender[a.id]).filter(Boolean))].join('/') || null, year: P.year ?? b.year ?? null, country: P.country || b.country || null, language: P.language || b.language || null,
     originalTitle: P.originalTitle || b.originalTitle || null, aliases: (P.aliases || []).filter(a => a !== (P.title || b.title)).slice(0, 8),
     summary: P.description?.text || b.summary || '', hook: b.hook || '', themes: P.themes ? P.themes.map(t => t.label) : (b.themes || []).filter(t => t !== '文本叙事' && t !== '作品语境'),
     facets: P.facets ? { era: P.facets.era || null, tradition: P.facets.tradition || null, genres: (P.facets.genres || []).map(g => g.label) } : null,

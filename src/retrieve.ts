@@ -37,9 +37,9 @@ export function expansionScores(e: Expansion, books: Book[]): number[] {
     for (const w of e.terms) if (t.includes(w)) s += w.length > 1 ? 1 : 0.4;
     return Math.min(3, s); });
 }
-const z = (a: number[]) => { const m = a.reduce((x, y) => x + y, 0) / a.length; const sd = Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) || 1; return a.map(x => (x - m) / sd); };
+export const zs = (a: number[]) => { const m = a.reduce((x, y) => x + y, 0) / a.length; const sd = Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) || 1; return a.map(x => (x - m) / sd); };
 /** Hybrid relevance: z-scored vector sim + lexical + expansion. Weights tuned on eval/notes.json. */
 export function hybrid(vec: number[] | null, lex: number[], exp: number[], w = { v: 1, l: 0.35, e: 0.9 }): number[] {
-  const V = vec ? z(vec) : lex.map(() => 0), Lx = z(lex), E = z(exp.some(x => x) ? exp : exp.map(() => 0));
+  const V = vec ? zs(vec) : lex.map(() => 0), Lx = zs(lex), E = zs(exp.some(x => x) ? exp : exp.map(() => 0));
   return V.map((v, i) => w.v * v + w.l * Lx[i] + w.e * (exp.some(x => x) ? E[i] : 0));
 }

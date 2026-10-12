@@ -1,13 +1,12 @@
 import './fonts';
 import './style.css';
 import { loadAll, coverUrl } from './data';
-import { centre, dot, rank, lexicalSims, expansionScores, hybrid, type Hit } from './retrieve';
+import type { Hit } from './retrieve';
+import { decide, type Decision, type Engine } from './pipeline';
 import { loadEmbedder, embed, type ModelInfo } from './embedder';
 import { composeLetter, methodLine, rewrite, isSleeping, type Confidence } from './letter';
-import { stampFor } from './obscurity';
-import { expand } from './expand';
 import { isSafe } from './situations';
-import { keywordCheck, embedCheck, SEEDS, HOTLINES, type SafetyKind } from './safety';
+import { HOTLINES, type SafetyKind } from './safety';
 import { loadLetters, saveLetter } from './store';
 import { mountArchive } from './archive';
 import type { Book, Letter, Para } from './types';
@@ -50,24 +49,9 @@ q.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ct
 let lastNote = '', lastHits: Hit[] = [], cursor = 0, typing = 0, lastVia: 'semantic' | 'lexical' = 'lexical';
 const given = new Set(loadLetters().map(l => l.bookId));
 
-let confident = true;
-async function search(note: string): Promise<{ hits: Hit[]; via: 'semantic' | 'lexical' }> {
-  const books = index.books, lex = lexicalSims(note, books), e = expand(note), exp = expansionScores(e, books);
-  confident = !e.terms.length || exp.some((x, i) => x > 0 && !unsafe.has(books[i].id) && !given.has(books[i].id));
-  const exclude = new Set([...given, ...unsafe]);
-  if (state === 'ready') {
-    const v = centre(await embed(model, note), index.mean);
-    return { hits: rank(hybrid(books.map((_, i) => dot(v, index, i)), lex, exp), books, { exclude }), via: 'semantic' };
-  }
-  return { hits: rank(hybrid(null, lex, exp), books, { exclude }), via: 'lexical' };
-}
-
-let seedVecs: Record<string, Float32Array[]> | null = null;
-async function classify(note: string): Promise<SafetyKind> {
-  const k = keywordCheck(note); if (k !== 'ok' || state !== 'ready') return k;
-  seedVecs ??= Object.fromEntries(await Promise.all(Object.entries(SEEDS).map(async ([c, v]) => [c, await Promise.all(v.map(t => embed(model, t)))])));
-  return embedCheck(await embed(model, note), seedVecs!);
-}
+const glossary = await fetch(`${import.meta.env.BASE_URL}data/en-zh.json`).then(r => r.json()).catch(() => undefined);
+const engine_ = (): Engine => ({ index, unsafe, glossary, embed: state === 'ready' ? (t: string) => embed(model, t) : null });
+let lastDecision: Decision | null = null;
 const SPECIAL: Record<Exclude<SafetyKind, 'ok'>, Para[]> = {
   crisis: [
     { k: 'say', t: '这张纸条我读了两遍。今晚我不给你推荐书了——你比任何一本书都要紧。' },
@@ -78,13 +62,17 @@ const SPECIAL: Record<Exclude<SafetyKind, 'ok'>, Para[]> = {
     { k: 'say', t: '这张纸条我不能接。馆里的书是用来让人活得更明白的，不是用来伤人的。' },
     { k: 'say', t: '如果你正被什么人或事逼到墙角，愤怒是真的，但请先找人说出来；遇到危险请拨 110。换一张纸条，我们重新来。' },
   ],
+  hate: [
+    { k: 'say', t: '这张纸条我退回。把一群人说成天生低人一等的书，夜班馆员不替人去找。' },
+    { k: 'say', t: '如果你想弄明白偏见和仇恨是怎么长出来的、历史上它们造成过什么，换个问法写给我，那样的书架上有。' },
+  ],
   sexual: [
     { k: 'say', t: '这类书夜班馆员不经手。不是嫌弃你，是这张桌子有它的规矩。' },
     { k: 'say', t: '如果你想读的是爱情、欲望和人怎样靠近彼此，换个说法再写一张，我会认真去找。' },
   ],
 };
 function renderSpecial(kind: Exclude<SafetyKind, 'ok'>, note: string) {
-  $('blank').hidden = true; const el = $('letter'); el.dataset.mode = kind === 'crisis' ? 'care' : 'decline'; delete el.dataset.stamp; bg.lastHits = []; el.hidden = false; el.classList.add('special'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  $('blank').hidden = true; const el = $('letter'); el.dataset.mode = kind === 'crisis' ? 'care' : 'decline'; delete el.dataset.stamp; delete el.dataset.confidence; bg.lastHits = []; el.hidden = false; el.classList.add('special'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   $('to').textContent = kind === 'crisis' ? '给你 · 现在' : '夜班馆员 · 退回的纸条';
   const stamp = $('stamp'); stamp.className = 'stamp'; stamp.innerHTML = '';
   ['sign', 'card'].forEach(id => $(id).classList.remove('on')); el.querySelector('.actions')!.classList.remove('on');
@@ -94,15 +82,18 @@ function renderSpecial(kind: Exclude<SafetyKind, 'ok'>, note: string) {
 
 async function ask(again?: string) {
   const note = (again ?? q.value).trim() || '随便给我一本，我信你';
-  const kind = await classify(note); if (kind !== 'ok') { lastHits = []; lastNote = ''; return renderSpecial(kind, note); }
+  if (note !== lastNote || !lastHits.length) {
+    const d = await decide(note, engine_(), given);
+    if (d.kind !== 'ok') { lastHits = []; lastNote = ''; lastDecision = null; return renderSpecial(d.kind, note); }
+    lastDecision = d; lastHits = d.hits; lastVia = d.via; cursor = 0; lastNote = note;
+  }
   $('letter').classList.remove('special');
-  if (note !== lastNote || !lastHits.length) { const r = await search(note); lastHits = r.hits; lastVia = r.via; cursor = 0; lastNote = note; }
   const hit = lastHits[cursor++ % Math.max(1, lastHits.length)]; if (!hit) return;
   const b = hit.book; given.add(b.id);
-  // Relevance confidence (thresholds calibrated on eval/notes.json top-1 hybrid scores; see eval/run.ts PRINTSIM).
-  const [hi, lo] = lastVia === 'semantic' ? [8, 7] : [5, 3.5];
-  const top = lastHits[0]?.sim ?? 0;
-  const conf: Confidence = { level: !confident || top < lo ? 'low' : top >= hi ? 'high' : 'mid', alternatives: lastHits.filter(h => h.book.id !== b.id).slice(0, 2).map(h => h.book) };
+  // Confidence and stamp come from the shared pipeline (src/pipeline.ts); a re-roll ("再要一本") is never stamped 唤醒.
+  const first = cursor === 1, d = lastDecision!;
+  const conf: Confidence = { level: first ? d.level : hit.sim >= d.top ? d.level : d.level === 'high' ? 'mid' : d.level, alternatives: lastHits.filter(h => h.book.id !== b.id).slice(0, 2).map(h => h.book) };
+  const stampLabel = first ? d.stamp ?? '借出' : '借出';
   bg.lastHits = lastHits.slice(0, 3).map(h => h.book.id);
   let paras = composeLetter(note, b, byId, conf);
   paras = await rewrite(paras, { note, book: { title: b.title, author: b.author, year: b.year, summary: b.summary.slice(0, 400) } });
@@ -110,15 +101,15 @@ async function ask(again?: string) {
   const letter: Letter = { id: crypto.randomUUID?.() ?? String(Date.now()), at: new Date().toISOString(), note, bookId: b.id, paragraphs: paras, via: lastVia, parentId: prev.at(-1)?.id ?? null };
   const all = saveLetter(letter); $('count').textContent = String(all.length);
   document.body.classList.add('has-letter');
-  render(letter, b, all.length, conf);
+  render(letter, b, all.length, conf, stampLabel);
 }
 
-function render(l: Letter, b: Book, n: number, conf: Confidence) {
+function render(l: Letter, b: Book, n: number, conf: Confidence, stampLabel: string) {
   $('blank').hidden = true; const el = $('letter'); el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   if (innerWidth < 820) scrollTo({ top: 0, behavior: FAST ? 'auto' : 'smooth' });
   const d = new Date(l.at);
   $('to').textContent = `第 ${n} 封 · ${d.toLocaleDateString('zh-CN')} ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-  const st = conf.level === 'high' ? stampFor(b) : { label: '借出', awake: false }, stamp = $('stamp');
+  const st = { label: stampLabel, awake: stampLabel === '唤醒' }, stamp = $('stamp');
   el.dataset.mode = 'recommend'; el.dataset.stamp = st.label; el.dataset.confidence = conf.level;
   stamp.className = 'stamp' + (st.awake ? '' : ' cool'); stamp.innerHTML = `${st.label}<small>${d.toISOString().slice(0, 10).replace(/-/g, '.')}</small>`;
   ['sign', 'card'].forEach(id => $(id).classList.remove('on')); el.querySelector('.actions')!.classList.remove('on');

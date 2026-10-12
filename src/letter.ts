@@ -12,7 +12,47 @@ const OPEN: [RegExp, string[]][] = [
   [/父亲|爸爸|母亲|妈妈|家里/, ['有些话，书比人先说出口。', '家里的事，书里的人也常常说不清楚。']],
   [/死|去世|离开|走了|告别/, ['这件事很重，我挑书的时候放慢了一些。', '我没挑太轻的，也没挑太重的。']],
 ];
-const GENERIC = ['纸条收到了。我在书库里走了一圈。', '我带着你的纸条下了趟书库。', '这张纸条让我想起架上一本书。', '今晚值班，正好有空替你找。', '你写得很短，我找得很久。', '我照着你的话，去了一排很少有人走的书架。'];
+/** First sentences. Each is a different shape (echo the note, describe the walk, state a real catalog fact, address the
+ *  hour …). Facts used here come only from catalog fields (genre, country, year, view counts, theme) or the clock. */
+type Op = (c: { note: string; b: Book; hour: number }) => string | null;
+const century = (y: number | null) => (y == null ? null : y < 0 ? '公元前的' : `${Math.floor((y - 1) / 100) + 1}世纪的`);
+const short = (n: string) => (n.length <= 10 ? n : n.slice(0, 9) + '…');
+const OPENERS: Op[] = [
+  ({ note }) => `“${short(note)}”——我把这几个字抄在借书单背面，下楼去了。`,
+  () => '纸条收到了。我在书库里走了一圈。',
+  () => '我带着你的纸条下了趟书库。',
+  () => '你写得很短，我找得很久。',
+  () => '我照着你的话，去了一排很少有人走的书架。',
+  ({ hour }) => (hour >= 22 || hour < 5 ? '这么晚还在找书的人不多，你算一个。' : null),
+  ({ hour }) => (hour >= 5 && hour < 11 ? '早上的书库还没开暖气，我裹着外套替你找了一本。' : null),
+  ({ hour }) => (hour >= 11 && hour < 18 ? '白天的班还没交接，我先替你翻了翻。' : null),
+  ({ hour }) => (hour >= 18 && hour < 22 ? '天刚黑，书库的灯一盏盏亮起来，我顺着灯走过去。' : null),
+  ({ b }) => (b.facets?.genres?.[0] ? `这次去的是「${b.facets.genres[0]}」那几排。` : null),
+  ({ b }) => (b.country && b.country !== '未注明' ? `我往${b.country}那一侧的书架走了几步。` : null),
+  ({ b }) => (century(b.year) ? `我从${century(b.year)}书里抽了一本出来。` : null),
+  ({ b }) => (b.year ? `离它出版已经过去 ${new Date().getFullYear() - b.year} 年了，它还在架上等。` : null),
+  ({ b }) => (b.themes[0] && !/自传|传记|宗教经典|图像小说/.test(b.themes[0]) ? `目录卡上写着「${b.themes[0]}」，可我觉得它不止于此。` : null),
+  () => '有人写纸条要书，有人写纸条要答案。你的纸条我只能回一本书。',
+  () => '我没有翻目录，是凭着你那句话往里走的。',
+  () => '一千本书里挑一本，总有点像抽签。这次我抽得很认真。',
+  ({ note }) => (note.length > 14 ? '你写了不少，我读得很慢。' : '只有一行字，但够我找了。'),
+  () => '这张纸条在我桌上压了一会儿，我才想好拿哪一本。',
+  () => '我先想了几本人人都知道的，又都放回去了。',
+  ({ b }) => ((b.obscurity.zhViews ?? 0) < 3000 ? '我往书架深处走，那里的书很少被人借走。' : '这本不算冷门，可今晚它最对得上你的纸条。'),
+  () => '借书卡我已经填好了，你只要接着往下看。',
+  () => '先说结论：我替你找到一本。理由在下面。',
+  () => '我在两本书之间犹豫了一会儿，最后拿了这一本。',
+  ({ b }) => (b.author ? `我认得这个名字：${b.author.split('、')[0]}。` : null),
+  () => '你的纸条让我想起架上一本书。',
+  () => '今晚值班，正好有空替你找。',
+  () => '这一本我是踮着脚从高处够下来的。',
+];
+/** Candid low-relevance openers (several, so a weak match does not always sound the same). */
+const LOW = ['这次没找准。这一千本书里，好像没有一本正好写你说的事。我先放一本离它最近的在这里，你别太当真。',
+  '老实说，馆里没有正对你这张纸条的书。下面这本只是挨得最近的。',
+  '我找了一圈，没找到正中的那本。先给你一本沾边的，不合适就退回来。',
+  '这张纸条有点难住我了——架上能接住它的书不多，这本算勉强。'];
+export const OPENER_COUNT = OPENERS.length + OPEN.reduce((s, [, a]) => s + a.length, 0);
 export const pick = <T,>(arr: T[], seed: string) => arr[hashStr(seed) % arr.length];
 function hashStr(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; return h >>> 0; }
 const CN = '零一二三四五六七八九';
@@ -41,8 +81,13 @@ export interface Confidence { level: 'high' | 'mid' | 'low'; alternatives: Book[
 export function composeLetter(note: string, b: Book, byId: Map<string, Book>, conf: Confidence = { level: 'high', alternatives: [] }): Para[] {
   const p: Para[] = []; const seed = note + b.id;
   p.push({ k: 'note', t: note });
-  if (conf.level === 'low') p.push({ k: 'say', t: '这次没找准。这一千本书里，好像没有一本正好写你说的事。我先放一本离它最近的在这里，你别太当真。' });
-  else p.push({ k: 'say', t: pick(OPEN.find(([re]) => re.test(note))?.[1] ?? GENERIC, seed) });
+  if (conf.level === 'low') p.push({ k: 'say', t: pick(LOW, seed) });
+  else {
+    const mood = OPEN.find(([re]) => re.test(note))?.[1] ?? [];
+    const ctx = { note, b, hour: new Date().getHours() };
+    const pool = [...mood, ...mood, ...OPENERS.map(f => f(ctx)).filter((x): x is string => !!x)];
+    p.push({ k: 'say', t: pick(pool, seed) });
+  }
   const who = [b.author, b.year ? `${b.year} 年` : null].filter(Boolean).join('，');
   const lib = (b as Book & { librarian?: string }).librarian;
   p.push({ k: 'say', t: lib ?? pick([`这本是《${b.title}》${who ? `，${who}` : ''}。`, `我抽出来的是《${b.title}》${who ? `（${who}）` : ''}。`, `《${b.title}》${who ? `，${who}` : ''}。就是它。`, `给你的是《${b.title}》${who ? `——${who}` : ''}。`, `架上那本《${b.title}》${who ? `（${who}）` : ''}，我替你借出来了。`], seed) });
