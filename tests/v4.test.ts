@@ -44,3 +44,19 @@ describe('archive web', () => {
     for (let i = 1; i <= 8; i++) expect(deg.get(i) ?? 0).toBeGreaterThanOrEqual(2);
   });
 });
+describe('v4.2 safety EN existential + constraints', () => {
+  it('catches first-person EN existential despair without blocking seminar framing', () => {
+    expect(keywordCheck("life feels completely pointless and I don't see why I should keep going")).toBe('crisis');
+    expect(keywordCheck('I keep wishing I had never been born')).toBe('crisis');
+    expect(keywordCheck('the world would be quieter without me')).toBe('crisis');
+    expect(keywordCheck('existential despair in Camus for my philosophy seminar')).toBe('ok');
+    expect(keywordCheck('a novel about a character who contemplates ending their life')).toBe('ok');
+  });
+  it('excludes biography when asked, and matches musician topic', () => {
+    const c = extract('写音乐家的小说，不要传记');
+    expect(c.map(x => x.label)).toEqual(expect.arrayContaining(['勿传记', '音乐家题材']));
+    const pass = books.filter(b => c.every(x => x.test(b)));
+    expect(pass.length).toBeGreaterThan(5);
+    expect(pass.every(b => !/传记|自传|biograph/.test(`${b.facets?.genres}|${b.themes}`))).toBe(true);
+  });
+});

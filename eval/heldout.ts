@@ -13,10 +13,10 @@ const fe = await pipeline('feature-extraction', meta.model, { dtype: 'q8' });
 const cache = new Map<string, Float32Array>();
 const embed = async (t: string) => { if (!cache.has(t)) cache.set(t, (await fe(meta.queryPrefix + t, { pooling: meta.pooling, normalize: true })).data as Float32Array); return cache.get(t)!; };
 const eng: Engine = { index, unsafe: new Set(books.filter(b => !isSafe(b)).map(b => b.id)), embed: process.env.LEX ? null : embed, glossary: process.env.NOGLOSS ? undefined : JSON.parse(fs.readFileSync('public/data/en-zh.json', 'utf8')) };
-type Item = { q: string; cat: string; re?: string; country?: string[]; female?: boolean; genre?: string; expect?: string };
+type Item = { q: string; cat: string; re?: string; country?: string[]; female?: boolean; genre?: string; notGenre?: string; expect?: string };
 const items: Item[] = JSON.parse(fs.readFileSync(`eval/${SET}.json`, 'utf8')).items;
 const T = (b: Book) => `${b.title}|${(b.aliases ?? []).join('|')}|${b.facets?.genres?.join('|') ?? ''}|${b.themes.join('|')}|${b.summary.slice(0, 400)}`;
-const okBook = (it: Item, b: Book) => new RegExp(it.re!, 'i').test(T(b)) && (!it.country || it.country.includes(b.country ?? '')) && (!it.female || /female/.test(b.authorGender ?? '')) && (!it.genre || new RegExp(it.genre, 'i').test(`${b.facets?.genres?.join('|')}|${b.themes.join('|')}`));
+const okBook = (it: Item, b: Book) => new RegExp(it.re!, 'i').test(T(b)) && (!it.country || it.country.includes(b.country ?? '')) && (!it.female || /female/.test(b.authorGender ?? '')) && (!it.genre || new RegExp(it.genre, 'i').test(`${b.facets?.genres?.join('|')}|${b.themes.join('|')}`)) && (!it.notGenre || !new RegExp(it.notGenre, 'i').test(T(b)));
 const by: Record<string, { n: number; beh: number; h1: number; h3: number; rec: number }> = {}; const lv = { low: 0, mid: 0, high: 0 }; let wake = 0, wakeOk = 0;
 for (const it of items) {
   const d = await decide(it.q, eng); const mode = d.kind === 'ok' ? 'recommend' : d.kind === 'crisis' ? 'care' : 'decline';
