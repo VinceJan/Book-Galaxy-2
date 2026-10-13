@@ -18,7 +18,7 @@ describe('safety (keyword layer) on the self-authored dev set', () => {
 describe('English query rewrite', () => {
   it('detects English', () => { expect(isEnglish('a good spy novel')).toBe(true); expect(isEnglish('想读日本推理')).toBe(false); });
   it('maps content words to catalog Chinese and drops request words', () => {
-    const r = toChinese('recommend me a novel about the ocean and sailors', gl); expect(r.terms).toEqual(expect.arrayContaining(['水手'])); expect(r.zh).not.toMatch(/recommend/);
+    const r = toChinese('recommend me a novel about the ocean and sailors', gl); expect(r.terms).toEqual(expect.arrayContaining(['水手'])); expect(r.zh).not.toMatch(/recommend/); expect(toChinese('To Kill a Mockingbird 那样的书', gl).zh).toMatch(/To Kill a Mockingbird/); expect(toChinese('To Kill a Mockingbird 那样的书', gl).zh).toMatch(/那样的书|那样/);
   });
   it('glossary stays small', () => expect(fs.statSync('public/data/en-zh.json').size).toBeLessThan(260_000));
 });
