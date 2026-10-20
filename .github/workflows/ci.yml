@@ -11,6 +11,7 @@ jobs:
         with: { node-version: 20, cache: npm }
       - run: npm ci
       - run: npm test
+      - run: npm run check:copy
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         if: github.ref == 'refs/heads/main'

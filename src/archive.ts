@@ -20,13 +20,13 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
   const clusterOf = (n: Node): string => { let c = n; while (c.parent > 0) c = nodes[c.parent]; return c.id; };
   function renderSide() {
     const L = nodes.slice(1).map(n => n.letter!);
-    if (!L.length) { side.innerHTML = `<p class="k">archive of letters</p><div class="n">0<small>封回信</small></div><div class="focus empty-arch">还没有回信。<br><a href="#/">先去写一张纸条 →</a></div>`; return; }
+    if (!L.length) { side.innerHTML = `<p class="k">archive of letters</p><div class="n">回信<small>还没有长出来</small></div><div class="focus empty-arch">还没有回信。<br><a href="#/">先去写一张纸条 →</a></div>`; return; }
     const f = nodes[focus].letter, b = f && byId.get(f.bookId);
     const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-    side.innerHTML = `<p class="k">archive of letters</p><div class="n">${L.length}<small>封回信 · ${(nodes.edges ?? []).length} 条连线 · ${new Set(nodes.slice(1).map(n => clusterOf(n))).size} 簇</small></div>
-    <div class="focus">${b && f ? `<h3>《${esc(b.title)}》</h3><div class="when">${new Date(f.at).toLocaleString('zh-CN')} · ${f.via === 'semantic' ? '语义检索' : '字面检索'}</div><div class="nt">“${esc(f.note)}”</div><p class="hk">${esc(b.hook)}</p>`
-      : `<h3>回信档案</h3><p class="hk">相近的书会接在彼此身上，共享主题的信之间有细线；毫不相干的信会另起一簇。</p>`}</div>
-    <ol>${nodes.slice(1).map((n, i) => `<li data-i="${i + 1}" class="${i + 1 === focus ? 'on' : ''}"><i>${String(i + 1).padStart(2, '0')}</i>${esc(byId.get(n.letter!.bookId)?.title ?? '')}</li>`).reverse().join('')}</ol>`;
+    side.innerHTML = `<p class="k">archive of letters</p><div class="n">回信<small>一封接着一封，长成菌丝</small></div>
+    <div class="focus">${b && f ? `<h3>《${esc(b.title)}》</h3><div class="when">${new Date(f.at).toLocaleDateString('zh-CN')} ${new Date(f.at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</div><div class="nt">“${esc(f.note)}”</div><p class="hk">${esc(b.hook)}</p>`
+      : `<h3>回信档案</h3><p class="hk">相近的书会接在彼此身上，心事相通的信之间牵着细线；毫不相干的，会另起一簇。</p>`}</div>
+    <ol>${nodes.slice(1).map((n, i) => `<li data-i="${i + 1}" class="${i + 1 === focus ? 'on' : ''}"><i>◦</i>${esc(byId.get(n.letter!.bookId)?.title ?? '')}</li>`).reverse().join('')}</ol>`;
   }
   side.addEventListener('click', e => { const li = (e.target as HTMLElement).closest('li'); if (li) setFocus(+li.dataset.i!); });
 
@@ -60,7 +60,8 @@ export function mountArchive(root: HTMLElement, byId: Map<string, Book>, index: 
     // theme web: thin threads between letters whose books share a (non-generic) theme
     web.forEach(([a, b, t]) => { if (prog(a) < 1 || prog(b) < 1) return; const [ax, ay] = toScreen(nodes[a]), [bx, by] = toScreen(nodes[b]); const hot = a === focus || b === focus;
       const nearOnly = web.length && t === '~'; x.setLineDash(nearOnly ? [1, 4] : [3, 4]); x.lineWidth = hot ? 1.3 : 1; x.strokeStyle = hot ? 'rgba(200,54,29,.75)' : nearOnly ? 'rgba(29,26,22,.3)' : 'rgba(29,26,22,.4)'; x.beginPath(); x.moveTo(ax, ay); x.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 - 30 * cam.z, bx, by); x.stroke(); x.setLineDash([]);
-      if (hot && t !== '~') { x.font = '11px "IBM Plex Mono", monospace'; x.fillStyle = 'rgba(200,54,29,.85)'; x.fillText(t, (ax + bx) / 2 + 4, (ay + by) / 2 - 16 * cam.z); } });
+      // The shared theme only decides the thread; its catalog label is never drawn.
+    });
     nodes.forEach((n, i) => { if (n.parent < 0) return; const p = nodes[n.parent]; const t = ease(prog(i)); const [ax, ay] = toScreen(p), [bx, by] = toScreen(n);
       const h = hash(n.id), bend = ((h % 100) / 100 - 0.5) * 0.6, mx = (ax + bx) / 2 - (by - ay) * bend, my = (ay + by) / 2 + (bx - ax) * bend;
       const hot = near.has(i) && near.has(n.parent), steps = 36, lim = Math.floor(steps * t);
