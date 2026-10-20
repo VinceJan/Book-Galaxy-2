@@ -12,8 +12,9 @@ const OPEN: [RegExp, string[]][] = [
   [/父亲|爸爸|母亲|妈妈|家里/, ['有些话，书比人先说出口。', '家里的事，书里的人也常常说不清楚。']],
   [/死|去世|离开|走了|告别/, ['这件事很重，我挑书的时候放慢了一些。', '我没挑太轻的，也没挑太重的。']],
 ];
-/** First sentences. Each is a different shape (echo the note, describe the walk, state a real catalog fact, address the
- *  hour …). Facts used here come only from catalog fields (genre, country, year, view counts, theme) or the clock. */
+/** First sentences. Each is a different shape (echo the note, describe the walk, a real catalog fact, the hour …).
+ *  Facts come only from catalog fields or the clock, and are said the way a librarian would say them:
+ *  no counts, scores, years-since arithmetic or raw catalog labels (same copy rules as v1; npm run check:copy). */
 type Op = (c: { note: string; b: Book; hour: number }) => string | null;
 const century = (y: number | null) => (y == null ? null : y < 0 ? '公元前的' : `${Math.floor((y - 1) / 100) + 1}世纪的`);
 const short = (n: string) => (n.length <= 10 ? n : n.slice(0, 9) + '…');
@@ -27,14 +28,14 @@ const OPENERS: Op[] = [
   ({ hour }) => (hour >= 5 && hour < 11 ? '早上的书库还没开暖气，我裹着外套替你找了一本。' : null),
   ({ hour }) => (hour >= 11 && hour < 18 ? '白天的班还没交接，我先替你翻了翻。' : null),
   ({ hour }) => (hour >= 18 && hour < 22 ? '天刚黑，书库的灯一盏盏亮起来，我顺着灯走过去。' : null),
-  ({ b }) => (b.facets?.genres?.[0] ? `这次去的是「${b.facets.genres[0]}」那几排。` : null),
+  ({ b }) => (b.facets?.genres?.[0] ? `这次去的是${b.facets.genres[0]}那几排。` : null),
   ({ b }) => (b.country && b.country !== '未注明' ? `我往${b.country}那一侧的书架走了几步。` : null),
   ({ b }) => (century(b.year) ? `我从${century(b.year)}书里抽了一本出来。` : null),
-  ({ b }) => (b.year ? `离它出版已经过去 ${new Date().getFullYear() - b.year} 年了，它还在架上等。` : null),
-  ({ b }) => (b.themes[0] && !/自传|传记|宗教经典|图像小说/.test(b.themes[0]) ? `目录卡上写着「${b.themes[0]}」，可我觉得它不止于此。` : null),
+  ({ b }) => (b.year ? '它出版很多年了，一直在架上等。' : null),
+  () => '我顺着书脊一本本摸过去，手停在了这一本上。',
   () => '有人写纸条要书，有人写纸条要答案。你的纸条我只能回一本书。',
   () => '我没有翻目录，是凭着你那句话往里走的。',
-  () => '一千本书里挑一本，总有点像抽签。这次我抽得很认真。',
+  () => '满架的书里挑一本，总有点像抽签。这次我抽得很认真。',
   ({ note }) => (note.length > 14 ? '你写了不少，我读得很慢。' : '只有一行字，但够我找了。'),
   () => '这张纸条在我桌上压了一会儿，我才想好拿哪一本。',
   () => '我先想了几本人人都知道的，又都放回去了。',
@@ -48,20 +49,13 @@ const OPENERS: Op[] = [
   () => '这一本我是踮着脚从高处够下来的。',
 ];
 /** Candid low-relevance openers (several, so a weak match does not always sound the same). */
-const LOW = ['这次没找准。这一千本书里，好像没有一本正好写你说的事。我先放一本离它最近的在这里，你别太当真。',
+const LOW = ['这次没找准。这满架的书里，好像没有一本正好写你说的事。我先放一本离它最近的在这里，你别太当真。',
   '老实说，馆里没有正对你这张纸条的书。下面这本只是挨得最近的。',
   '我找了一圈，没找到正中的那本。先给你一本沾边的，不合适就退回来。',
   '这张纸条有点难住我了——架上能接住它的书不多，这本算勉强。'];
 export const OPENER_COUNT = OPENERS.length + OPEN.reduce((s, [, a]) => s + a.length, 0);
 export const pick = <T,>(arr: T[], seed: string) => arr[hashStr(seed) % arr.length];
 function hashStr(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; return h >>> 0; }
-const CN = '零一二三四五六七八九';
-/** Human rounding of a count, Chinese style: 573 → 五百来, 1840 → 一千八百来, 86 → 不到一百. */
-export function humanCount(n: number): string {
-  if (n < 100) return '不到一百'; if (n < 1000) return `${CN[Math.floor(n / 100)]}百来`;
-  if (n < 10000) { const k = Math.floor(n / 1000), h = Math.floor((n % 1000) / 100); return `${CN[k]}千${h ? CN[h] + '百' : ''}来`; }
-  return `${Math.floor(n / 10000)}万多`;
-}
 /** Absolute + relative threshold: a book is "sleeping" only if few people opened it, not just "less than median". */
 export const isSleeping = (b: Book) => (b.obscurity.zhViews ?? 0) < 3000 && b.obscurity.percentile >= 0.6;
 
@@ -94,14 +88,11 @@ export function composeLetter(note: string, b: Book, byId: Map<string, Book>, co
   const exp = expand(note), sit = situations(b);
   const shared = sit.find(x => exp.terms.some(t => x.evidence.includes(t) || t.includes(x.evidence))) ?? null;
   const ex = excerpt(b, 70, 220, shared && !shared.evidence.startsWith('主题:') ? shared.evidence : undefined); if (ex) p.push({ k: 'quote', t: ex });
-  if (isSleeping(b) && conf.level !== 'low') p.push({ k: 'say', t: pick([`这一年，中文世界里只有${humanCount(b.obscurity.zhViews ?? 0)}人点开过它的词条。`, `过去一年，只有${humanCount(b.obscurity.zhViews ?? 0)}人在中文维基上翻到过它。它等得够久了。`, `它很少被人想起——这一年中文维基上只有${humanCount(b.obscurity.zhViews ?? 0)}次打开。`], seed) });
+  // How rarely it is opened is said, never counted.
+  if (isSleeping(b) && conf.level !== 'low') p.push({ k: 'say', t: pick(['这一年里，中文世界很少有人点开过它的词条。', '过去一年，几乎没有人在中文维基上翻到它。它等得够久了。', '它很少被人想起——这一年里，打开它的人寥寥无几。'], seed) });
   if (conf.level === 'low' && conf.alternatives.length) p.push({ k: 'say', t: `也可以试试${conf.alternatives.slice(0, 2).map(a => `《${a.title}》`).join('或')}。要是都不对，换个说法再写一张，我重新找。` });
   else { const nx = nextBook(b, byId, seed); if (nx) p.push({ k: 'say', t: nx }); }
   return p;
-}
-export function methodLine(b: Book, via: 'semantic' | 'lexical', window: [string, string]) {
-  const o = b.obscurity;
-  return `${via === 'semantic' ? '语义检索' : '字面检索'} · 维基浏览 ${window[0].slice(0, 6)}–${window[1].slice(0, 6)}：中文 ${o.zhViews?.toLocaleString() ?? '—'} / 英文 ${o.enViews?.toLocaleString() ?? '—'} · ${o.sitelinks} 个语言版本 · 冷门度 ${Math.round(o.percentile * 100)}`;
 }
 /** Optional live rewrite (VITE_LLM_ENDPOINT). Output is accepted only if every 《title》 and number it mentions exists in the draft. */
 export async function rewrite(paragraphs: Para[], facts: unknown): Promise<Para[]> {

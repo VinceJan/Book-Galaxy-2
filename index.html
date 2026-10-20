@@ -4,20 +4,20 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>夜班馆员 · 书架星系 2.0</title>
-<meta name="description" content="给图书馆写一张纸条。夜班馆员会在一千本书里，替你找回一本很少被翻开的书。" />
+<meta name="description" content="给图书馆写一张纸条。夜班馆员会走进书库深处，替你找回一本很少被翻开的书。" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23c8361d'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23efe7d6' font-family='serif'>夜</text></svg>" />
 </head>
 <body>
 <header class="mast">
   <a class="mark" href="#/">夜班<b>·</b>馆员</a>
-  <nav><a href="#/" data-r="desk">写纸条</a><a href="#/archive" data-r="archive">回信档案 <span id="count">0</span></a></nav>
-  <div class="meta" id="meta">书架星系 2.0 · 1000 本书</div>
+  <nav><a href="#/" data-r="desk">写纸条</a><a href="#/archive" data-r="archive">回信档案 <span id="count" aria-hidden="true"></span></a></nav>
+  <div class="meta" id="meta">书架星系 2.0 · 书库深处</div>
 </header>
 <main id="desk" class="view desk-view">
   <section class="compose">
     <p class="kicker">NIGHT DESK · 今夜值班</p>
     <h1>给图书馆<br />写一张<em>纸条</em>。</h1>
-    <p class="lede">不搜书名，不选分类。说说你此刻的处境——馆员会在一千本书里，替你找回一本很少被人翻开的。</p>
+    <p class="lede">不搜书名，不选分类。说说你此刻的处境——馆员会走进书库深处，替你找回一本很少被人翻开的。</p>
     <form id="form">
       <label class="sr" for="q">你的纸条</label>
       <textarea id="q" rows="3" maxlength="200" placeholder="比如：最近总觉得自己在原地打转……"></textarea>
@@ -50,8 +50,8 @@
 </main>
 <main id="credits" class="view credits-view" hidden>
   <h2>出处与版权</h2>
-  <p class="lede">书目文字逐字引自中文维基百科（CC BY-SA 4.0，固定到具体修订版）；结构化事实来自 Wikidata（CC0）；冷门度来自 Wikimedia 浏览量与 Wikidata 语言版本数。封面各有其权利：自由许可的封面按其许可使用；出版方版权与非自由封面仅用于书目识别，权利人如要求移除，我们会立即照办。数据包：<span class="mono" id="credits-pkg"></span>。</p>
-  <p class="lede">字体：Noto Serif SC、霞鹜文楷、IBM Plex Mono、Cormorant Garamond（均为 SIL OFL 1.1）。语义模型：BAAI bge-small-zh-v1.5（MIT），运行时：ONNX Runtime Web（MIT）。英文纸条的离线中译词表取自 <a href="https://www.mdbg.net/chinese/dictionary?page=cc-cedict" target="_blank" rel="noopener">CC-CEDICT</a>（CC BY-SA 4.0）；作者性别取自 Wikidata（CC0）。</p>
+  <p class="lede">书的介绍逐字引自中文维基百科（CC BY-SA 4.0，固定到具体修订版）；作者、年代等事实来自 Wikidata（CC0）；一本书是否久未被翻开，依据的是 Wikimedia 的公开浏览记录与 Wikidata 的语言版本。封面各有其权利：自由许可的封面按其许可使用；出版方版权与非自由封面仅用于识别这本书，权利人如要求移除，我们会立即照办。数据包：<span class="mono" id="credits-pkg"></span>。</p>
+  <p class="lede">字体：Noto Serif SC、霞鹜文楷、IBM Plex Mono、Cormorant Garamond（均为 SIL OFL 1.1）。馆员读纸条用的模型：BAAI bge-small-zh-v1.5（MIT），在浏览器里由 ONNX Runtime Web（MIT）运行。英文纸条的离线中译词表取自 <a href="https://www.mdbg.net/chinese/dictionary?page=cc-cedict" target="_blank" rel="noopener">CC-CEDICT</a>（CC BY-SA 4.0）；作者性别取自 Wikidata（CC0）。</p>
   <ol id="credits-list" class="credits"></ol>
 </main>
 <footer class="foot mono" id="foot"></footer>

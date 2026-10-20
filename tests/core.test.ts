@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { rank, centre, dot, lexicalSims, bigrams } from '../src/retrieve';
-import { composeLetter, excerpt, humanCount, isSleeping } from '../src/letter';
+import { composeLetter, excerpt, isSleeping } from '../src/letter';
 import { stampFor } from '../src/obscurity';
 import { isSafe, UNSAFE, cleanQuote } from '../src/situations';
 import { layoutLetters, firstDegree } from '../src/layout';
@@ -46,8 +46,9 @@ describe('letter', () => {
       expect(all).not.toMatch(/归在|逐一比对|美国文学|20世纪作品/);
     }
   });
-  it('human count only for genuinely sleeping books', () => {
-    expect(humanCount(573)).toBe('五百来'); expect(humanCount(1840)).toBe('一千八百来'); expect(humanCount(42)).toBe('不到一百');
+  it('rarely-opened line only for genuinely sleeping books, and it never counts', () => {
+    const sleepers = books.filter(isSleeping).slice(0, 40); expect(sleepers.length).toBeGreaterThan(10);
+    for (const b of sleepers) for (const p of composeLetter('最近很累', b, byId).filter(x => x.k === 'say')) expect(p.t, p.t).not.toMatch(/\d+\s*(?:人|次|个|本|封)|[十百千万][一二三四五六七八九十百千万来多]*\s*(?:人|次)|百分|冷门度|浏览量/);
     const pb = books.find(b => b.title === '花花公子')!; expect(isSleeping(pb)).toBe(false); expect(stampFor(pb).label).toBe('借出');
     const xyj = books.find(b => b.title === '西游记')!; expect(composeLetter('x', xyj, byId).some(p => p.t.includes('点开过'))).toBe(false);
   });
@@ -86,6 +87,12 @@ describe('data package wiring', () => {
   it('credits list text + cover provenance for every book', () => {
     const c = JSON.parse(fs.readFileSync('public/data/credits.json', 'utf8')); expect(c.books.length).toBe(1000);
     expect(c.books.filter((x: { cover: unknown }) => x.cover).length).toBe(books.filter(b => b.cover).length);
+  });
+  it('book threads are v1 relations.v5 prose only (removed links excluded, no types/strength/gravity)', () => {
+    const c = cat as Catalog & { threads: { source: string; count: number } }; expect(c.threads.source).toBe('dist/relations.v5.json'); expect(c.threads.count).toBe(1647);
+    const g = books.flatMap(b => b.links.filter(l => l.grounded)); expect(g.length).toBe(2 * 1647);
+    for (const l of g) { expect(l.kind).toBe('thread'); expect(Object.keys(l).sort()).toEqual(['band', 'grounded', 'id', 'kind', 'sharedThemes', 'similarity']); }
+    expect(books.filter(b => b.cover).length).toBeGreaterThanOrEqual(939);
   });
   it('aliases feed the lexical fallback', () => { const s = lexicalSims('The Goal', books); expect(books[s.indexOf(Math.max(...s))].title).toBe('目标'); });
 });

@@ -4,7 +4,7 @@ import { loadAll, coverUrl } from './data';
 import type { Hit } from './retrieve';
 import { decide, type Decision, type Engine } from './pipeline';
 import { loadEmbedder, embed, type ModelInfo } from './embedder';
-import { composeLetter, methodLine, rewrite, isSleeping, type Confidence } from './letter';
+import { composeLetter, rewrite, isSleeping, type Confidence } from './letter';
 import { isSafe } from './situations';
 import { HOTLINES, type SafetyKind } from './safety';
 import { loadLetters, saveLetter } from './store';
@@ -26,13 +26,13 @@ const unsafe = new Set(index.books.filter(b => !isSafe(b)).map(b => b.id));
 type EngineState = 'idle' | 'downloading' | 'ready' | 'failed';
 let state: EngineState = 'idle';
 const engine = $('engine');
-const MB = (n: number) => (n / 1e6).toFixed(1);
 function setState(s: EngineState, loaded = 0, total = 0) {
   state = s; engine.dataset.state = s;
-  engine.innerHTML = s === 'idle' ? `<b>字面检索</b>开始写字时，馆员会去取语义目录（约 ${meta.downloadMB ?? 19} MB，只取一次）`
-    : s === 'downloading' ? `<b>取目录中</b><i style="--p:${total ? loaded / total : 0}"></i>${total ? `${MB(loaded)} / ${MB(total)} MB` : '准备中…'}`
-    : s === 'ready' ? `<b>语义检索</b>目录已在本机，不联网也能用`
-    : `<b>字面检索</b>语义目录没能取到，馆员按字面帮你找`;
+  // No sizes, progress numbers or engine names on screen: only what the librarian is doing.
+  engine.innerHTML = s === 'idle' ? `<b>灯已亮</b>开始写字时，馆员会把目录搬到桌上，只搬这一次`
+    : s === 'downloading' ? `<b>搬目录中</b><i style="--p:${total ? loaded / total : 0}"></i>${total ? '目录正在路上…' : '准备中…'}`
+    : s === 'ready' ? `<b>目录在手边</b>不联网，也能替你找`
+    : `<b>凭字面找</b>目录没能搬来，馆员先照着你的字句去找`;
 }
 setState('idle');
 function warm() { if (state !== 'idle') return; setState('downloading'); loadEmbedder(model, (l, t) => setState('downloading', l, t)).then(() => setState('ready'), () => setState('failed')); }
@@ -99,16 +99,16 @@ async function ask(again?: string) {
   paras = await rewrite(paras, { note, book: { title: b.title, author: b.author, year: b.year, summary: b.summary.slice(0, 400) } });
   const prev = loadLetters();
   const letter: Letter = { id: crypto.randomUUID?.() ?? String(Date.now()), at: new Date().toISOString(), note, bookId: b.id, paragraphs: paras, via: lastVia, parentId: prev.at(-1)?.id ?? null };
-  const all = saveLetter(letter); $('count').textContent = String(all.length);
+  const all = saveLetter(letter); markArchive(all.length);
   document.body.classList.add('has-letter');
-  render(letter, b, all.length, conf, stampLabel);
+  render(letter, b, conf, stampLabel);
 }
 
-function render(l: Letter, b: Book, n: number, conf: Confidence, stampLabel: string) {
+function render(l: Letter, b: Book, conf: Confidence, stampLabel: string) {
   $('blank').hidden = true; const el = $('letter'); el.hidden = false; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
   if (innerWidth < 820) scrollTo({ top: 0, behavior: FAST ? 'auto' : 'smooth' });
   const d = new Date(l.at);
-  $('to').textContent = `第 ${n} 封 · ${d.toLocaleDateString('zh-CN')} ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+  $('to').textContent = `${d.toLocaleDateString('zh-CN')} ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
   const st = { label: stampLabel, awake: stampLabel === '唤醒' }, stamp = $('stamp');
   el.dataset.mode = 'recommend'; el.dataset.stamp = st.label; el.dataset.confidence = conf.level;
   stamp.className = 'stamp' + (st.awake ? '' : ' cool'); stamp.innerHTML = `${st.label}<small>${d.toISOString().slice(0, 10).replace(/-/g, '.')}</small>`;
@@ -117,13 +117,13 @@ function render(l: Letter, b: Book, n: number, conf: Confidence, stampLabel: str
   const img = $('card').querySelector('img'); img?.addEventListener('error', () => img.remove());
   typeOut(l.paragraphs, () => { $('sign').classList.add('on'); setTimeout(() => $('card').classList.add('on'), 200); setTimeout(() => stamp.classList.add('on'), 650); setTimeout(() => el.querySelector('.actions')!.classList.add('on'), 900); });
 }
-function card(b: Book, via: 'semantic' | 'lexical') {
+function card(b: Book, _via: 'semantic' | 'lexical') {
   const c = coverUrl(b.cover);
   const meta1 = [b.author, b.year, b.country].filter(Boolean).map(x => esc(String(x))).join(' · ');
   return `<div class="cover"><div class="ph">${esc(b.title)}</div>${c ? `<img src="${esc(c)}" alt="《${esc(b.title)}》封面" loading="lazy" decoding="async" width="${b.coverW ?? 180}" height="${b.coverH ?? 260}">` : ''}</div>
   <div class="cardtext"><div class="cno">借书卡 · ${isSleeping(b) ? '久未借出' : '在架'}</div><h3>《${esc(b.title)}》</h3>${b.originalTitle && b.originalTitle !== b.title ? `<div class="orig">${esc(b.originalTitle)}</div>` : ''}
   <div class="who">${meta1}</div>
-  <p class="method">${esc(methodLine(b, via, cat.obscuritySource.window))} · <a href="${esc(b.revisionUrl || b.sourceUrl)}" target="_blank" rel="noopener">维基原文 ↗</a> · <a href="#/credits">出处与版权</a></p></div>`;
+  <p class="method"><a href="${esc(b.revisionUrl || b.sourceUrl)}" target="_blank" rel="noopener">维基原文 ↗</a> · <a href="#/credits">出处与版权</a></p></div>`;
 }
 function typeOut(paras: Para[], done: () => void) {
   const body = $('body'); body.innerHTML = ''; const my = ++typing;
@@ -139,15 +139,17 @@ function typeOut(paras: Para[], done: () => void) {
   tick();
 }
 
-$('foot').innerHTML = `<a href="#/credits">出处与版权 →</a> · 书目：中文维基百科 / Wikidata（CC BY-SA 4.0）· 封面：Open Library · 冷门度：Wikimedia 浏览量 ${cat.obscuritySource.window.join('–')}（中+英）与 Wikidata 语言版本数，取于 ${cat.obscuritySource.fetchedAt.slice(0, 10)} · 语义检索：${meta.model.split('/')[1]}，模型与字体均托管在本站，在浏览器本地运行`;
-$('count').textContent = String(loadLetters().length);
+$('foot').innerHTML = `<a href="#/credits">出处与版权 →</a> · 书的介绍来自中文维基百科与 Wikidata（CC BY-SA 4.0）· 封面来自 Open Library 与 Wikimedia Commons · 馆员就在你的浏览器里读纸条，纸条不会寄往别处`;
+/** The nav shows that letters exist, never how many. */
+function markArchive(n: number) { $('count').textContent = n ? '•' : ''; }
+markArchive(loadLetters().length);
 
 const archive = mountArchive($('archive'), byId, index);
 let creditsDone = false;
 async function showCredits() {
   if (creditsDone) return; creditsDone = true;
   const c = await fetch(`${import.meta.env.BASE_URL}data/credits.json`).then(r => r.json()) as { package: string; books: { title: string; text: { url: string }; cover: { provider: string; sourceUrl: string; licenseClass: string; license: string | null; artist: string | null } | null }[] };
-  const LC: Record<string, string> = { free: '自由许可', 'publisher-copyright': '出版方版权 · 仅作书目识别', 'non-free-fair-use': '非自由 · 合理使用', unknown: '许可未明' };
+  const LC: Record<string, string> = { free: '自由许可', 'publisher-copyright': '出版方版权 · 仅用于识别这本书', 'non-free-fair-use': '非自由 · 合理使用', unknown: '许可未明' };
   $('credits-list').innerHTML = c.books.map(b => `<li><b>《${esc(b.title)}》</b><span>文字：<a href="${esc(b.text.url)}" target="_blank" rel="noopener">中文维基百科</a>（CC BY-SA 4.0）</span><span>${b.cover ? `封面：<a href="${esc(b.cover.sourceUrl ?? '#')}" target="_blank" rel="noopener">${esc(b.cover.provider ?? '')}</a> · ${esc(b.cover.license ?? LC[b.cover.licenseClass] ?? '')}${b.cover.artist ? ` · ${esc(b.cover.artist)}` : ''}` : '封面：暂缺（用书名占位）'}</span></li>`).join('');
   $('credits-pkg').textContent = c.package;
 }
